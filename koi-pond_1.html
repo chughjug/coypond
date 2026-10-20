@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Koi pond stakes</title>
+<style>
+  :root {
+    --water: #7fb3a3; --water-deep: #4f8a7c;
+    --pad: #5e8f3e; --pad-vein: #4a7531;
+    --ink: #173430; --caption: rgba(23,52,48,.75);
+    --sheet: #e6f0ea; --sheet-ink: #173430; --line: rgba(23,52,48,.18);
+    --accent: #c9461a; --accent-ink: #fff; --win: #2f7a3a; --lose: #a8321a;
+    --gold: #a87a12; --backdrop: rgba(10,30,27,.45);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --water: #1f3f3a; --water-deep: #0f2724;
+      --pad: #3f6a2c; --pad-vein: #2f5321;
+      --ink: #e6efe9; --caption: rgba(230,239,233,.7);
+      --sheet: #132c28; --sheet-ink: #e6efe9; --line: rgba(230,239,233,.16);
+      --accent: #e8692c; --accent-ink: #1a0d06; --win: #7fd08a; --lose: #f08a6c;
+      --gold: #e6c35c; --backdrop: rgba(0,0,0,.6);
+      color-scheme: dark;
+    }
+  }
+  html, body { margin:0; height:100%; overflow:hidden; background:var(--water-deep); color:var(--ink);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif; -webkit-tap-highlight-color:transparent; }
+  canvas { display:block; width:100vw; height:100vh; touch-action:none; }
+  button { font:inherit; color:inherit; cursor:pointer; }
+  button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+  .hud { position:fixed; top:max(12px,env(safe-area-inset-top)); left:18px; right:18px;
+    display:flex; justify-content:space-between; align-items:flex-start; pointer-events:none; }
+  .purse b { font-size:28px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .purse .unit { font-size:16px; }
+  .vip { font-size:13px; font-weight:600; color:var(--gold); border:1.5px solid var(--gold); border-radius:6px; padding:0 5px; margin-left:4px; }
+  .sub { font-size:14px; color:var(--caption); margin-top:2px; font-variant-numeric:tabular-nums; }
+  .shopbtn { pointer-events:auto; padding:8px 16px; border-radius:20px; border:0; background:var(--accent); color:var(--accent-ink); font-weight:600; font-size:16px; }
+  .caption { position:fixed; left:20px; right:20px; top:calc(max(12px,env(safe-area-inset-top)) + 70px);
+    text-align:center; font-style:italic; font-size:17px; color:var(--caption); pointer-events:none; margin:0; }
+
+  .sheet { position:fixed; z-index:10; left:0; right:0; bottom:0; background:var(--sheet); color:var(--sheet-ink);
+    border-radius:22px 22px 0 0; padding:16px 16px max(16px,env(safe-area-inset-bottom));
+    box-shadow:0 -6px 30px rgba(0,0,0,.18); transition:transform .35s ease; max-height:72vh; overflow-y:auto; }
+  .sheet.hidden { transform:translateY(110%); }
+  .sheet h2 { margin:0 0 10px; font-size:19px; font-weight:600; }
+  .fish { display:flex; gap:10px; overflow-x:auto; padding-bottom:4px; scrollbar-width:none; }
+  .fish::-webkit-scrollbar { display:none; }
+  .fish button { flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:4px;
+    min-width:66px; padding:9px 8px; border:1.5px solid var(--line); border-radius:14px; background:transparent; font-size:15px; }
+  .swatch { width:34px; height:14px; border-radius:7px; position:relative; overflow:hidden; }
+  .swatch i { position:absolute; width:12px; height:12px; border-radius:50%; top:1px; left:12px; }
+  .odds { font-size:13px; opacity:.75; font-variant-numeric:tabular-nums; }
+  .row { display:flex; gap:8px; margin:10px 0; }
+  .row button { flex:1; padding:9px 4px; border:1.5px solid var(--line); border-radius:12px; background:transparent;
+    font-size:15px; font-variant-numeric:tabular-nums; }
+  .row[hidden] { display:none; }
+  .row button:disabled { opacity:.35; }
+  [aria-pressed="true"] { border-color:var(--accent) !important; box-shadow:inset 0 0 0 1.5px var(--accent); }
+  .go { width:100%; padding:13px; border:0; border-radius:14px; background:var(--accent); color:var(--accent-ink);
+    font-size:17px; font-weight:600; line-height:1.3; }
+  .go:disabled { opacity:.4; }
+
+  .result { position:fixed; z-index:15; left:50%; top:42%; transform:translate(-50%,-50%) scale(.9); opacity:0;
+    background:var(--sheet); color:var(--sheet-ink); padding:18px 24px; border-radius:18px; text-align:center;
+    box-shadow:0 10px 40px rgba(0,0,0,.25); transition:opacity .3s, transform .3s; pointer-events:none; width:min(280px,80vw); }
+  .result.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
+  .result.vip { border:3px solid var(--gold); }
+  .result strong { display:block; font-size:30px; margin:4px 0; font-variant-numeric:tabular-nums; }
+  .result small { display:block; font-size:14px; opacity:.8; margin-top:6px; line-height:1.4; }
+  .result .w { color:var(--win); } .result .l { color:var(--lose); }
+
+  .backdrop { position:fixed; inset:0; z-index:20; background:var(--backdrop); display:flex; align-items:center; justify-content:center; padding:20px; }
+  .backdrop[hidden] { display:none; }
+  .card { background:var(--sheet); color:var(--sheet-ink); border-radius:20px; padding:20px; width:min(360px,100%);
+    max-height:80vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,.3); }
+  .card h3 { margin:0 0 8px; font-size:21px; }
+  .card p { margin:0 0 10px; line-height:1.45; }
+  .card .big { font-size:20px; font-weight:600; }
+  .card .fine { font-size:13px; font-style:italic; opacity:.7; }
+  .actions { display:flex; flex-direction:column; gap:8px; margin-top:14px; }
+  .actions button { padding:12px; border-radius:12px; border:1.5px solid var(--line); background:transparent; font-size:16px; }
+  .actions button.primary { background:var(--accent); color:var(--accent-ink); border-color:transparent; font-weight:600; }
+  .actions button:disabled { opacity:.4; }
+  .item { display:flex; gap:12px; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--line); }
+  .item p { margin:2px 0 0; font-size:14px; opacity:.8; }
+  .item button { flex:0 0 auto; padding:8px 12px; border-radius:10px; border:1.5px solid var(--accent); background:transparent; font-size:14px; white-space:nowrap; }
+  .item button:disabled { opacity:.35; }
+  .ad { border:2px dashed var(--line); border-radius:14px; padding:22px 14px; text-align:center; }
+  .ad .tag { font-size:12px; opacity:.6; }
+  .ad .title { font-size:30px; font-weight:700; margin:8px 0; color:var(--accent); }
+  .egg { font-size:56px; text-align:center; animation:wobble .3s infinite alternate; }
+  @keyframes wobble { from { transform:rotate(-12deg); } to { transform:rotate(12deg); } }
+  .addcoins { pointer-events:auto; width:30px; height:30px; border-radius:50%; border:0; margin-left:6px; vertical-align:4px;
+    background:var(--gold); color:var(--sheet); font-size:22px; font-weight:700; line-height:30px; padding:0; }
+  .actions button.tiny { border:0; padding:4px; font-size:12px; opacity:.5; text-decoration:underline; background:transparent; }
+  .pack { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px; margin-bottom:8px;
+    border:1.5px solid var(--line); border-radius:14px; }
+  .pack.hot { border-color:var(--gold); box-shadow:inset 0 0 0 1.5px var(--gold); }
+  .pack b { font-size:18px; font-variant-numeric:tabular-nums; }
+  .pack .badge { display:inline-block; font-size:12px; font-weight:600; color:var(--gold); margin-left:6px; }
+  .pack p { margin:2px 0 0; font-size:13px; opacity:.75; }
+  .pack button { flex:0 0 auto; padding:10px 14px; border-radius:12px; border:0; background:var(--accent); color:var(--accent-ink); font-weight:600; font-size:15px; }
+  .optin { display:flex; gap:8px; align-items:flex-start; font-size:11px; opacity:.55; line-height:1.35; margin:6px 0 4px; }
+  .optin input { margin:1px 0 0; width:14px; height:14px; flex:0 0 auto; }
+  .receipt div { display:flex; justify-content:space-between; gap:12px; font-size:15px; padding:3px 0; font-variant-numeric:tabular-nums; }
+  .receipt .total { border-top:1px solid var(--line); margin-top:4px; padding-top:6px; font-weight:600; }
+  .toast { position:fixed; z-index:30; left:50%; bottom:calc(max(16px,env(safe-area-inset-bottom)) + 8px); transform:translateX(-50%);
+    background:var(--ink); color:var(--water-deep); padding:10px 16px; border-radius:12px; font-size:15px; opacity:0; transition:opacity .25s; pointer-events:none; max-width:86vw; text-align:center; }
+  .toast.show { opacity:1; }
+  @media (prefers-reduced-motion: reduce) { .sheet, .result, .toast { transition:none; } .egg { animation:none; } }
+</style>
+</head>
+<body>
+<canvas id="pond" aria-label="Koi pond"></canvas>
+<header class="hud">
+  <div class="purse"><b id="coins">100</b> <span class="unit">coins</span><button class="addcoins" id="addCoins" aria-label="Buy coins">+</button><span class="vip" id="vipTag" hidden>VIP</span><span class="vip" id="whaleTag" hidden>Whale</span>
+    <div class="sub" id="sub"></div></div>
+  <button class="shopbtn" id="shopBtn">Shop</button>
+</header>
+<p class="caption" id="caption"></p>
+
+<section class="sheet" id="sheet" aria-label="Place a bet">
+  <h2 id="sheetTitle">Which koi eats the pellet first?</h2>
+  <div class="row" id="modeRow"></div>
+  <div class="row" id="legsRow"></div>
+  <div class="fish" id="fishList"></div>
+  <div class="row" id="amounts"></div>
+  <div class="row" id="extras"></div>
+  <button class="go" id="go" disabled>Pick a koi</button>
+</section>
+
+<div class="result" id="result" role="status" aria-live="polite"></div>
+<div class="backdrop" id="modal" hidden><div class="card" id="card" role="dialog" aria-modal="true"></div></div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const canvas = document.getElementById('pond'), ctx = canvas.getContext('2d');
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const rand = (a,b) => a + Math.random()*(b-a), TAU = Math.PI*2;
+const chance = p => Math.random() < p;
+const fmt = n => n.toLocaleString('en-US');
+
+let W, H;
+function resize(){ const d=Math.min(devicePixelRatio||1,2); W=innerWidth; H=innerHeight;
+  canvas.width=W*d; canvas.height=H*d; ctx.setTransform(d,0,0,d,0,0); }
+addEventListener('resize', resize); resize();
+
+const PATTERNS = [
+  ['Hana','#f2ede3','#e2552a'], ['Kin','#f08a2c','#f6d9a8'], ['Sumi','#f2ede3','#1c1c1c'],
+  ['Beni','#e2552a','#1c1c1c'], ['Yuki','#f5d36b','#f2ede3'], ['Kuro','#2a2a2a','#e2552a'],
+  ['Ai','#c9d6dc','#2b4a6b'], ['Momo','#f6c2b0','#f2ede3'],
+];
+function lerpAngle(a,b,t){ const d=((b-a+Math.PI)%TAU+TAU)%TAU-Math.PI; return a+d*t; }
+
+// ---- economy ----
+let coins=100, gems=1, pellets=5, wins=0, losses=0, credit=0;
+let luckyOwned=0, useLucky=false, luckyThisRace=false, vip=false, insured=false, gemPrice=10, lossStreak=0;
+const MAX_PELLETS=5, refillAt=Date.now()+4*3600e3, hats={};
+let mode='single', legs=3, parlay=null;
+let pick=null, stake=10, state='betting', fixed='lose'; // betting | armed | racing | result
+const WIN_RATE=0.1;
+let spent=0, whale=false, firstBuy=true, club=false, clubPrice=9.99, clubTimer=null;
+const money = n => '$'+n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+const PACKS=[
+  {name:'Pouch of coins', coins:500, price:0.99, note:'A little treat.'},
+  {name:'Bucket of coins', coins:2000, price:4.99, badge:'Most popular', note:'Chosen by people who also chose this.'},
+  {name:'Pond of coins', coins:12000, price:49.99, badge:'Best value', note:'Only 4.1¢ per coin, which sounds small.'},
+  {name:'Ocean of coins', coins:100000, price:999.99, badge:'For whales', note:'First purchase bonus: double coins! (This pack only.)', hot:true},
+];
+const AMOUNTS=[10,25,50,'All in'];
+
+class Koi {
+  constructor(i){
+    [this.name,this.base,this.spot] = PATTERNS[i];
+    this.x=rand(60,W-60); this.y=rand(60,H*.6); this.a=rand(0,TAU);
+    this.speed=.8; this.size=rand(15,21); this.wander=rand(0,100); this.phase=rand(0,TAU);
+    this.dash = rand(1.6, 2.6);
+    this.spots = Array.from({length:3},()=>[Math.floor(rand(1,9)),rand(.4,.9)]);
+    this.trail = Array.from({length:12},()=>({x:this.x,y:this.y}));
+    this.clearHandicap();
+  }
+  clearHandicap(){ this.mult=1; this.turn=1; this.delay=0; this.jitter=0; this.cooldown=0; this.noise=rand(0,TAU); }
+  get odds(){ return Math.round(7 + (2.6-this.dash)*6); }  // shown as N:1, roughly 7 to 13
+  update(food){
+    this.wander+=.01; this.noise+=rand(.05,.15);
+    let target=null, best=1e9;
+    for(const f of food){ const d=Math.hypot(f.x-this.x,f.y-this.y); if(d<best){ best=d; target=f; } }
+    const racing = target && target.race && state==='racing';
+    if(racing && this.delay>0){ this.delay--; target=null; }       // "didn't notice yet"
+    let desired;
+    if(target && this.cooldown<=0){
+      desired=Math.atan2(target.y-this.y,target.x-this.x) + Math.sin(this.noise)*this.jitter;
+      const top = this.dash * (racing ? this.mult : 1);
+      this.speed+=(top-this.speed)*.05;
+      if(best<this.size*.7 && !target.eaten){
+        if(racing && this===pick && fixed==='lose') nudge(target, this);
+        else { target.eaten=true; ate(this, target); }
+      }
+    } else {
+      if(this.cooldown>0) this.cooldown--;
+      desired=this.a+Math.sin(this.wander*1.7+this.phase)*.6; this.speed+=(.8-this.speed)*.02;
+    }
+    const m=60;
+    if(this.x<m) desired=lerpAngle(desired,0,.5);
+    if(this.x>W-m) desired=lerpAngle(desired,Math.PI,.5);
+    if(this.y<m) desired=lerpAngle(desired,Math.PI/2,.5);
+    if(this.y>H-m) desired=lerpAngle(desired,-Math.PI/2,.5);
+    const turnRate = target ? .08*(racing ? this.turn : 1) : .03;
+    this.a=lerpAngle(this.a,desired,turnRate);
+    this.x+=Math.cos(this.a)*this.speed; this.y+=Math.sin(this.a)*this.speed;
+    this.phase+=.08*this.speed;
+    this.trail[0].x=this.x; this.trail[0].y=this.y;
+    const seg=this.size*.32;
+    for(let i=1;i<this.trail.length;i++){ const p=this.trail[i-1], q=this.trail[i];
+      const g=Math.atan2(q.y-p.y,q.x-p.x); q.x=p.x+Math.cos(g)*seg; q.y=p.y+Math.sin(g)*seg; }
+  }
+  side(i,dir){ const t=this.trail,n=t.length,s=this.size,p=t[i],q=t[Math.min(i+1,n-1)];
+    const g=Math.atan2(q.y-p.y,q.x-p.x)+dir*Math.PI/2;
+    const w=s*.5*Math.sin(Math.PI*Math.min(1,(i+1.2)/(n*.9)))*(1-i/(n*1.15));
+    return [p.x+Math.cos(g)*w,p.y+Math.sin(g)*w]; }
+  bodyPath(){ const n=this.trail.length,h=this.trail[0]; ctx.beginPath();
+    ctx.moveTo(h.x+Math.cos(this.a)*this.size*.2,h.y+Math.sin(this.a)*this.size*.2);
+    for(let i=0;i<n;i++) ctx.lineTo(...this.side(i,1));
+    for(let i=n-1;i>=0;i--) ctx.lineTo(...this.side(i,-1)); ctx.closePath(); }
+  draw(highlight, label){
+    const t=this.trail,n=t.length,s=this.size;
+    if(highlight){ ctx.strokeStyle=css('--accent'); ctx.lineWidth=2.5;
+      ctx.beginPath(); ctx.arc(t[3].x,t[3].y,s*1.5,0,TAU); ctx.stroke(); }
+    ctx.save(); ctx.translate(6,8); ctx.globalAlpha=.18; this.bodyPath(); ctx.fillStyle='#000'; ctx.fill(); ctx.restore();
+    const tail=t[n-1], pre=t[n-3], ta=Math.atan2(tail.y-pre.y,tail.x-pre.x)+Math.sin(this.phase)*.35;
+    ctx.fillStyle=this.base; ctx.globalAlpha=.85; ctx.beginPath(); ctx.moveTo(tail.x,tail.y);
+    ctx.quadraticCurveTo(tail.x+Math.cos(ta+.5)*s,tail.y+Math.sin(ta+.5)*s,tail.x+Math.cos(ta+.25)*s*1.1,tail.y+Math.sin(ta+.25)*s*1.1);
+    ctx.lineTo(tail.x+Math.cos(ta-.25)*s*1.1,tail.y+Math.sin(ta-.25)*s*1.1);
+    ctx.quadraticCurveTo(tail.x+Math.cos(ta-.5)*s,tail.y+Math.sin(ta-.5)*s,tail.x,tail.y); ctx.fill();
+    for(const dir of [-1,1]){ const p=t[2],q=t[3],g=Math.atan2(q.y-p.y,q.x-p.x)+dir*(1.9+Math.sin(this.phase)*.2);
+      ctx.beginPath(); ctx.ellipse(p.x+Math.cos(g)*s*.4,p.y+Math.sin(g)*s*.4,s*.32,s*.14,g,0,TAU); ctx.fill(); }
+    ctx.globalAlpha=1; this.bodyPath(); ctx.fillStyle=this.base; ctx.fill();
+    ctx.save(); this.bodyPath(); ctx.clip(); ctx.fillStyle=this.spot;
+    for(const [i,r] of this.spots){ const p=t[Math.min(i,n-1)]; ctx.beginPath(); ctx.arc(p.x,p.y,s*r*.45,0,TAU); ctx.fill(); }
+    ctx.restore();
+    const hat=hats[this.name];
+    if(hat){ const h=t[1]; ctx.fillStyle=hat; ctx.beginPath();
+      ctx.moveTo(h.x-s*.38,h.y-s*.2); ctx.lineTo(h.x+s*.38,h.y-s*.2); ctx.lineTo(h.x,h.y-s*1.1); ctx.closePath(); ctx.fill();
+      ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(h.x,h.y-s*1.1,s*.13,0,TAU); ctx.fill(); }
+    if(label){ ctx.font='italic 14px "Iowan Old Style", Palatino, Georgia, serif'; ctx.textAlign='center';
+      ctx.fillStyle=css('--ink'); ctx.fillText(this.name, t[3].x, t[3].y - s*(hat?1.9:1.2)); }
+  }
+}
+
+class LilyPad {
+  constructor(){ this.x=rand(0,W); this.y=rand(0,H); this.r=rand(26,50); this.rot=rand(0,TAU);
+    this.notch=rand(.3,.5); this.drift=rand(0,TAU); this.flower=Math.random()<.3; }
+  draw(time){ const bob=reduceMotion?0:Math.sin(time*.0004+this.drift)*.05;
+    ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(this.rot+bob);
+    ctx.fillStyle='rgba(0,0,0,.15)'; ctx.beginPath(); ctx.arc(4,6,this.r,this.notch,TAU-this.notch*.2); ctx.lineTo(4,6); ctx.fill();
+    ctx.fillStyle=css('--pad'); ctx.beginPath(); ctx.arc(0,0,this.r,this.notch,TAU-this.notch*.2); ctx.lineTo(0,0); ctx.fill();
+    ctx.strokeStyle=css('--pad-vein'); ctx.lineWidth=1.2;
+    for(let k=0;k<7;k++){ const a=this.notch+(k+.5)*(TAU-this.notch*1.2)/7;
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*this.r*.85,Math.sin(a)*this.r*.85); ctx.stroke(); }
+    if(this.flower){ ctx.translate(-this.r*.3,-this.r*.2);
+      for(let k=0;k<8;k++){ ctx.rotate(TAU/8); ctx.fillStyle=k%2?'#f4c6d4':'#f9e1e8';
+        ctx.beginPath(); ctx.ellipse(this.r*.22,0,this.r*.22,this.r*.09,0,0,TAU); ctx.fill(); }
+      ctx.fillStyle='#f2c94c'; ctx.beginPath(); ctx.arc(0,0,this.r*.08,0,TAU); ctx.fill(); }
+    ctx.restore(); }
+}
+
+
+const koi = Array.from({length: W<500 ? 6 : 8}, (_,i) => new Koi(i));
+const pads = Array.from({length: Math.round(Math.max(4, W*H/80000))}, () => new LilyPad());
+let food=[], ripples=[], captionTimer=null, toastTimer=null, modalTimers=[];
+
+function say(text, ms){ $('caption').textContent=text; clearTimeout(captionTimer);
+  if(ms) captionTimer=setTimeout(()=>{ $('caption').textContent=''; }, ms); }
+function toast(text){ const t=$('toast'); t.textContent=text; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'), 2600); }
+
+// ---- the quiet part ----
+function fixRace(){
+  if(parlay) fixed = parlay.leg < parlay.legs ? 'win' : 'lose';   // every leg hits except the last one
+  else fixed = chance(WIN_RATE) ? 'win' : 'lose';
+  for(const k of koi){ k.clearHandicap(); k.delay=Math.floor(rand(0,14)); k.jitter=rand(0,.15); k.mult=rand(.95,1.05); }
+  const others=koi.filter(k=>k!==pick);
+  if(fixed==='win'){
+    pick.mult=rand(1.15,1.3); pick.delay=0;
+    for(const k of others){ k.mult*=rand(.7,.85); k.delay+=10; }
+    return;
+  }
+  const tricks=[
+    ()=>{ pick.mult*=rand(.75,.9); },
+    ()=>{ pick.turn=rand(.4,.7); },
+    ()=>{ pick.delay=Math.floor(rand(18,45)); },
+    ()=>{ pick.jitter=rand(.35,.6); },
+    ()=>{ const r=others[Math.floor(Math.random()*others.length)]; r.mult*=rand(1.08,1.2); r.delay=0; },
+  ].sort(()=>Math.random()-.5);
+  tricks.slice(0,1+Math.floor(Math.random()*3)).forEach(t=>t());
+}
+function nudge(f, k){
+  const g=k.a+rand(-.7,.7), push=rand(2.4,3.8);
+  f.vx=Math.cos(g)*push; f.vy=Math.sin(g)*push;
+  k.cooldown=Math.floor(rand(14,32)); k.mult*=rand(.85,.95);
+  ripples.push({x:f.x,y:f.y,r:2,life:.6});
+}
+
+// ---- bet sheet ----
+const parlayPay = (k,n,st) => Math.round(st*Math.pow(k.odds+1,n)) - st;
+function toggleRow(el, options, current, onPick){
+  el.innerHTML='';
+  for(const [label,value,disabled] of options){
+    const b=document.createElement('button'); b.textContent=label; b.disabled=!!disabled;
+    b.setAttribute('aria-pressed', value===current && !disabled);
+    b.onclick=()=>{ onPick(value); renderSheet(); };
+    el.appendChild(b);
+  }
+}
+function renderSheet(){
+  $('sheetTitle').textContent = mode==='parlay' ? 'Pick a koi to win several races in a row' : 'Which koi eats the pellet first?';
+  toggleRow($('modeRow'), [['Single bet','single'],['Parlay','parlay']], mode, v=>{ mode=v; });
+  $('legsRow').hidden = mode!=='parlay';
+  toggleRow($('legsRow'), [['2 legs',2],['3 legs',3],['4 legs',4],['6 legs',6]], legs, v=>{ legs=v; });
+
+  const list=$('fishList'); list.innerHTML='';
+  for(const k of koi){
+    const b=document.createElement('button');
+    b.setAttribute('aria-pressed', pick===k);
+    b.innerHTML=`<span class="swatch" style="background:${k.base}"><i style="background:${k.spot}"></i></span>${k.name}<span class="odds">${k.odds}:1</span>`;
+    b.onclick=()=>{ pick=k; renderSheet(); };
+    list.appendChild(b);
+  }
+  if(stake>coins) stake=Math.min(10,coins);
+  toggleRow($('amounts'), AMOUNTS.map(a=>{ const v=a==='All in'?coins:a; return [a,v,v>coins||v<=0]; }), stake, v=>{ stake=v; });
+
+  const extras=[];
+  if(luckyOwned>0) extras.push([`Lucky pellet (${luckyOwned})`,'lucky']);
+  if(mode==='parlay') extras.push(['Insurance, 2 gems','ins', gems<2 && !insured]);
+  $('extras').hidden = !extras.length;
+  $('extras').innerHTML='';
+  for(const [label,key,disabled] of extras){
+    const b=document.createElement('button'); b.textContent=label; b.disabled=!!disabled;
+    b.setAttribute('aria-pressed', key==='lucky'?useLucky:insured);
+    b.onclick=()=>{ if(key==='lucky') useLucky=!useLucky; else insured=!insured; renderSheet(); };
+    $('extras').appendChild(b);
+  }
+
+  const go=$('go');
+  if(coins<=0){ go.disabled=false; go.textContent='Out of coins. Tap to get more'; return; }
+  go.disabled = !pick || stake<=0;
+  go.textContent = !pick ? 'Pick a koi'
+    : mode==='parlay' ? `Bet ${stake}: ${pick.name} wins ${legs} in a row to win ${fmt(parlayPay(pick,legs,stake))}`
+    : `Bet ${stake} on ${pick.name} to win ${stake*pick.odds}`;
+}
+$('go').onclick=()=>{
+  if(coins<=0) return brokeModal();
+  if(!pick||stake<=0) return;
+  if(pellets<=0){ outOfPellets(); return; }
+  const ins = mode==='parlay' && insured && gems>=2;
+  if(ins) gems-=2;
+  coins-=stake; pellets--;
+  luckyThisRace = useLucky && luckyOwned>0; if(luckyThisRace) luckyOwned--; useLucky=false; insured=false;
+  parlay = mode==='parlay' ? {leg:1, legs, insured:ins, pay:parlayPay(pick,legs,stake)} : null;
+  updateHud(); state='armed'; $('sheet').classList.add('hidden');
+  say(parlay ? `Leg 1 of ${legs}. Tap the water to drop the pellet` : 'Tap the water to drop the pellet');
+};
+
+function updateHud(){
+  $('coins').textContent=fmt(coins);
+  $('vipTag').hidden=!vip;
+  const bits=[`${gems} ${gems===1?'gem':'gems'}`, `${pellets}/${MAX_PELLETS} pellets`];
+  if(credit) bits.push(`${fmt(credit)} Pond Credit`);
+  if(spent) bits.push(`${money(spent)} pretend spent`);
+  $('whaleTag').hidden=!whale;
+  if(wins+losses) bits.push(`${wins} won, ${losses} lost`);
+  $('sub').textContent=bits.join(', ');
+}
+
+// ---- races ----
+function ate(k, f){
+  if(f.race){ raceOver(k); return; }
+  say(`${k.name} got that one`, 1600);
+}
+function showResult(html, ms, then){
+  const r=$('result'); r.innerHTML=html; r.classList.toggle('vip',vip); r.classList.add('show'); say('');
+  setTimeout(()=>{ r.classList.remove('show'); then(); }, ms);
+}
+function raceOver(winner){
+  if(state!=='racing') return;
+  state='result';
+  const lucky = luckyThisRace ? '<small>Lucky pellet bonus applied: +0%</small>' : '';
+  const vipLine = vip ? '<small>Lost in VIP style.</small>' : '';
+  if(parlay){
+    const p=parlay;
+    if(winner===pick && p.leg<p.legs){
+      updateHud();
+      return showResult(`Leg ${p.leg} of ${p.legs} hits<strong class="w">✓</strong><small>Still on track for ${fmt(p.pay)} coins</small>`, 1800, ()=>{
+        p.leg++; state='armed'; say(`Leg ${p.leg} of ${p.legs}. Tap the water to drop the pellet`);
+      });
+    }
+    let html;
+    if(winner===pick){ coins+=stake+p.pay; wins++; html=`The whole parlay hit<strong class="w">+${fmt(p.pay)}</strong>`; }
+    else {
+      losses++; lossStreak++;
+      const hit=p.leg-1, close = hit===p.legs-1;
+      html=`${winner.name} got there first<strong class="l">−${stake}</strong><small>${close ? `${hit} of ${p.legs} legs hit. One fish away from ${fmt(p.pay)}!` : `Leg ${p.leg} missed.`}</small>`;
+      if(p.insured && close){ credit+=stake;
+        html+=`<small>Insurance paid out ${stake} Pond Credit. Pond Credit can’t be spent on anything.</small>`; }
+      html+=vipLine;
+    }
+    parlay=null; updateHud();
+    return showResult(html, 3000, endRound);
+  }
+  let html;
+  if(winner===pick){ const pay=stake*pick.odds; coins+=stake+pay; wins++; lossStreak=0;
+    html=`${winner.name} got there first<strong class="w">+${pay}</strong>${lucky}`; }
+  else { losses++; lossStreak++;
+    html=`${winner.name} got there first<strong class="l">−${stake}</strong>${lucky}${vipLine}`; }
+  updateHud();
+  showResult(html, 2500, endRound);
+}
+function endRound(){
+  for(const k of koi){ k.clearHandicap(); k.dash=rand(1.6,2.6); }
+  luckyThisRace=false;
+  pick=null; state='betting'; renderSheet(); updateHud();
+  $('sheet').classList.remove('hidden');
+  if(coins<=0) return setTimeout(brokeModal, 400);
+  if(lossStreak>0 && lossStreak%3===0) setTimeout(flashSale, 500);
+}
+
+// ---- modals ----
+function openModal(html, buttons){
+  clearModalTimers();
+  $('card').innerHTML = html + '<div class="actions" id="actions"></div>';
+  setButtons(buttons);
+  $('modal').hidden=false;
+}
+function setButtons(buttons){
+  const a=$('actions'); a.innerHTML='';
+  for(const b of buttons){ const el=document.createElement('button'); el.textContent=b.label;
+    el.className = b.primary ? 'primary' : (b.tiny ? 'tiny' : ''); el.disabled=!!b.disabled; el.onclick=b.onClick; a.appendChild(el); }
+}
+function closeModal(){ clearModalTimers(); $('modal').hidden=true; renderSheet(); updateHud(); }
+function clearModalTimers(){ modalTimers.forEach(clearInterval); modalTimers=[]; }
+function every(ms, fn){ modalTimers.push(setInterval(fn, ms)); }
+
+function flashSale(){
+  let left=10;
+  openModal(`<h3>Flash sale</h3><p class="big">1,000 coins for only 1,100 coins</p>
+    <p id="saleTimer">Ends in 0:10</p><p class="fine">That’s 100 coins of savings, in the other direction.</p>`, [
+    {label:'Claim deal', primary:true, onClick:()=>{
+      if(coins<1100) return toast('You need 1,100 coins to claim this deal.');
+      coins-=100; closeModal(); toast('Deal claimed. You saved −100 coins.'); }},
+    {label:'No thanks', onClick:closeModal}]);
+  let ext='';
+  every(1000, ()=>{ left--;
+    if(left<0){ left=10; ext='Extended, just for you. '; }
+    $('saleTimer').textContent=`${ext}Ends in 0:${String(left).padStart(2,'0')}`; });
+}
+
+function outOfPellets(){
+  const tick=()=>{ const s=Math.max(0,Math.floor((refillAt-Date.now())/1000));
+    $('refill').textContent=`${Math.floor(s/3600)}:${String(Math.floor(s/60)%60).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; };
+  openModal(`<h3>Out of pellets</h3><p>Every bet uses one pellet. Your next free pellet arrives in <b id="refill"></b>.</p>`, [
+    {label:'Watch an ad for 1 pellet', primary:true, onClick:()=>playAd(0)},
+    {label:'Refill for 5 gems', disabled:gems<5, onClick:()=>{ gems-=5; pellets=MAX_PELLETS; closeModal(); toast('Pellets refilled'); }},
+    {label:'Close', onClick:closeModal}]);
+  tick(); every(1000, tick);
+}
+
+const ADS=[['Koi Max™','The only fish food that is also a fish.'],
+           ['Pellet Pro','Nine out of ten koi could not be reached for comment.']];
+function playAd(stage){
+  let left=5;
+  openModal(`<div class="ad"><div class="tag">Ad ${stage+1} of 2</div><div class="title">${ADS[stage][0]}</div><p>${ADS[stage][1]}</p></div>
+    <p id="adTimer" style="text-align:center;margin-top:12px">Reward in 5</p>`, []);
+  every(1000, ()=>{ left--;
+    if(left>0) return $('adTimer').textContent=`Reward in ${left}`;
+    clearModalTimers();
+    if(stage===0){ $('adTimer').textContent='Almost there'; setButtons([{label:'Skip ad', onClick:()=>playAd(1)}]); }
+    else { $('adTimer').textContent='Thanks for watching'; setButtons([{label:'Collect 1 pellet', primary:true,
+      onClick:()=>{ pellets=Math.min(MAX_PELLETS,pellets+1); closeModal(); toast('+1 pellet'); }}]); }
+  });
+}
+
+function openShop(){
+  const pack=gemPrice*12;
+  const items=[
+    {name:'1 gem', desc:'The price goes up every time you buy. That’s just how gems work.', price:`${fmt(gemPrice)} coins`,
+      can:coins>=gemPrice, buy:()=>{ coins-=gemPrice; gems++; gemPrice=Math.ceil(gemPrice*1.15); }},
+    {name:'Gem pack, 10 gems', desc:'Best value!* *Slightly worse value.', price:`${fmt(pack)} coins`,
+      can:coins>=pack, buy:()=>{ coins-=pack; gems+=10; gemPrice=Math.ceil(gemPrice*1.15); }},
+    {name:'Lucky pellet', desc:'Raises your chance of winning by up to 0%.', price:'3 gems',
+      can:gems>=3, buy:()=>{ gems-=3; luckyOwned++; }},
+    {name:'Mystery egg', desc:'Hatches a hat for a fish you don’t own.', price:'5 gems',
+      can:gems>=5, buy:()=>{ gems-=5; hatchEgg(); return 'stay'; }},
+    {name:'Pellet refill', desc:`Back to ${MAX_PELLETS} pellets.`, price:'5 gems',
+      can:gems>=5 && pellets<MAX_PELLETS, buy:()=>{ gems-=5; pellets=MAX_PELLETS; }},
+    {name:'Pond Pass VIP', desc: vip ? 'You’re VIP. Your losses now have gold trim.' : 'Gold trim on every loss. That’s the whole benefit.',
+      price: vip ? 'Owned' : '20 gems', can:!vip && gems>=20, buy:()=>{ gems-=20; vip=true; }},
+  ];
+  openModal(`<h3>Pond shop</h3><p class="fine">You have ${fmt(coins)} coins and ${gems} ${gems===1?'gem':'gems'}.</p>` +
+    items.map((it,i)=>`<div class="item"><div><b>${it.name}</b><p>${it.desc}</p></div><button data-i="${i}" ${it.can?'':'disabled'}>${it.price}</button></div>`).join(''),
+    [{label:'Close', onClick:closeModal}]);
+  $('card').querySelectorAll('.item button').forEach(b=>b.onclick=()=>{
+    const it=items[+b.dataset.i]; if(!it.can) return;
+    const r=it.buy(); updateHud(); if(r!=='stay'){ toast(`Bought: ${it.name}`); openShop(); }
+  });
+}
+
+function hatchEgg(){
+  openModal(`<h3>Hatching…</h3><div class="egg" aria-hidden="true">🥚</div>`, []);
+  setTimeout(()=>{
+    const r=Math.random();
+    const [rarity,color,line] = r<.001 ? ['Legendary', css('--gold'), 'One in a thousand. It’s the same hat, but gold.']
+      : r<.1 ? ['Rare', '#8e5bd1', 'Only 9.9% of players got this. It’s the same hat, but purple.']
+      : ['Common', ['#4f86c6','#d14b7a','#3fa36b'][Math.floor(Math.random()*3)], '90% of players got this exact hat.'];
+    const k=koi[Math.floor(Math.random()*koi.length)];
+    hats[k.name]=color;
+    openModal(`<h3>It’s a ${rarity} hat!</h3><p>${k.name} is wearing it now. ${line}</p><p class="fine">Hats give no advantage of any kind.</p>`,
+      [{label:'Open another egg (5 gems)', disabled:gems<5, onClick:()=>{ gems-=5; updateHud(); hatchEgg(); }},
+       {label:'Nice', primary:true, onClick:closeModal}]);
+  }, reduceMotion ? 200 : 1400);
+}
+$('shopBtn').onclick=openShop;
+
+// ---- buy coins (everything is pretend money) ----
+function openStore(){
+  let left=299, optIn=true;
+  const timeStr=()=>`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`;
+  openModal(`<h3>Get coins</h3><p class="fine">Offer ends in <b id="offerTimer">${timeStr()}</b>. Prices may go up when it does.</p>` +
+    PACKS.map((pk,i)=>`<div class="pack ${pk.hot?'hot':''}"><div><b>${fmt(pk.coins)}</b>${pk.badge?`<span class="badge">${pk.badge}</span>`:''}
+      <p>${pk.name}. ${pk.note}</p></div><button data-i="${i}">${money(pk.price)}*</button></div>`).join('') +
+    `<label class="optin"><input type="checkbox" id="optin" checked> Also join Coin Club for ${money(clubPrice)} a week, renewing automatically forever, which I agree to by not reading this.</label>
+     <p class="fine">*All prices are pretend. There’s no real money, card, or checkout anywhere in this game.</p>`,
+    [ ...(club ? [{label:'Manage Coin Club', onClick:cancelClub1}] : []), {label:'Close', onClick:closeModal}]);
+  $('optin').onchange=e=>{ optIn=e.target.checked; };
+  $('card').querySelectorAll('.pack button').forEach(b=>b.onclick=()=>buyPack(PACKS[+b.dataset.i], optIn));
+  every(1000, ()=>{ left = left>0 ? left-1 : 299; $('offerTimer').textContent=timeStr(); });
+}
+function buyPack(pk, optIn){
+  const doubled = firstBuy && pk.hot;
+  const got = pk.coins*(doubled?2:1);
+  coins+=got; spent+=pk.price; firstBuy=false;
+  if(pk.hot) whale=true;
+  const joined = optIn && !club;
+  if(joined){ startClub(); spent+=clubPrice; }
+  updateHud(); renderSheet();
+  openModal(`<h3>Purchase complete</h3><div class="receipt">
+      <div><span>${pk.name}</span><span>+${fmt(got)} coins</span></div>
+      ${doubled?'<div><span>First purchase bonus</span><span>doubled</span></div>':''}
+      ${joined?`<div><span>Coin Club, weekly</span><span>${money(clubPrice)}</span></div>`:''}
+      <div class="total"><span>Pretend charge</span><span>${money(pk.price + (joined?clubPrice:0))}</span></div>
+      <div><span>Lifetime pretend spending</span><span>${money(spent)}</span></div></div>
+      <p class="fine" style="margin-top:10px">${pk.hot?'Welcome to the whale lounge. You now have a badge.':'Most players who bought this went on to buy more.'}</p>`,
+    [{label:`Buy again for ${money(pk.price)}`, primary:true, onClick:()=>buyPack(pk,false)},
+     {label:'Done', onClick:closeModal}]);
+}
+function startClub(){
+  club=true; clearInterval(clubTimer);
+  clubTimer=setInterval(()=>{ spent+=clubPrice; coins+=100; updateHud(); renderSheet();
+    toast(`Coin Club renewed: ${money(clubPrice)} (pretend). +100 coins`); }, 45000);
+}
+function cancelClub1(){
+  openModal(`<h3>Leave Coin Club?</h3><p>You’ll lose 100 coins a week, plus the warm feeling of belonging to a club.</p>`,
+    [{label:'Keep my benefits', primary:true, onClick:closeModal},
+     {label:'Continue to cancel', onClick:cancelClub2}]);
+}
+function cancelClub2(){
+  openModal(`<h3>Are you sure?</h3><p>Hana has been a member for as long as you have. She’ll notice.</p>`,
+    [{label:'Stay in the club', primary:true, onClick:closeModal},
+     {label:'Yes, I’m sure', onClick:cancelClub3}]);
+}
+function cancelClub3(){
+  const half=Math.round(clubPrice*50)/100;
+  openModal(`<h3>Wait! One last offer</h3><p class="big">Stay for ${money(half)} a week</p><p>That’s half price, for one week, then back to ${money(clubPrice)}.</p>`,
+    [{label:'Accept offer', primary:true, onClick:()=>{ toast(`Great choice. See you next week.`); closeModal(); }},
+     {label:'No, really, cancel it', tiny:true, onClick:()=>{ club=false; clearInterval(clubTimer); closeModal();
+       toast('Coin Club cancelled. We’ll miss your pretend money.'); }}]);
+}
+function brokeModal(){
+  openModal(`<h3>Out of coins</h3><p>You were so close. ${koi[0].name} believed in you.</p><p class="fine">*Pretend money.</p>`,
+    [{label:`Buy 2,000 coins for ${money(4.99)}*`, primary:true, onClick:()=>buyPack(PACKS[1], false)},
+     {label:'See all coin packs', onClick:openStore},
+     {label:'I don’t want to keep playing', tiny:true, onClick:()=>{
+       openModal(`<h3>Really?</h3><p>${koi[0].name} is looking at you. Fish can’t blink, so she’ll be looking for a while.</p>`,
+         [{label:'Buy coins', primary:true, onClick:openStore},
+          {label:'Take 100 free coins and feel bad about it', tiny:true, onClick:()=>{ coins=100; closeModal(); toast('Here are 100 coins. We’re not mad. Just disappointed.'); }}]); }}]);
+}
+$('addCoins').onclick=openStore;
+
+// ---- input ----
+canvas.addEventListener('pointerdown', e=>{
+  const x=e.clientX, y=e.clientY;
+  if(state==='racing' || state==='result') return;
+  ripples.push({x,y,r:2,life:1});
+  const pellet={x,y,vx:0,vy:0,eaten:false,race:false,lucky:false};
+  if(state==='armed'){ pellet.race=true; pellet.lucky=luckyThisRace; fixRace(); state='racing'; say(''); }
+  else food=food.filter(f=>f.race);
+  food.push(pellet);
+});
+
+// ---- render loop ----
+const glints=Array.from({length:40},()=>({x:rand(0,1),y:rand(0,1),p:rand(0,TAU)}));
+function frame(time){
+  const g=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*.7);
+  g.addColorStop(0,css('--water')); g.addColorStop(1,css('--water-deep'));
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  if(!reduceMotion){ ctx.fillStyle='rgba(255,255,255,.06)';
+    for(const s of glints){ const a=Math.sin(time*.001+s.p);
+      if(a>.3){ ctx.beginPath(); ctx.ellipse(s.x*W,s.y*H,18*a,4*a,s.p,0,TAU); ctx.fill(); } } }
+  food=food.filter(f=>!f.eaten);
+  for(const f of food){
+    f.x=Math.min(W-20,Math.max(20,f.x+f.vx)); f.y=Math.min(H-20,Math.max(20,f.y+f.vy));
+    f.vx*=.9; f.vy*=.9;
+    ctx.fillStyle=f.lucky?css('--gold'):css('--accent'); ctx.beginPath(); ctx.arc(f.x,f.y,f.lucky?6:4.5,0,TAU); ctx.fill();
+  }
+  for(const k of koi) k.update(food);
+  for(const k of koi) k.draw(k===pick, state!=='result');
+  ripples=ripples.filter(r=>r.life>0);
+  for(const r of ripples){ r.r+=1.6; r.life-=.012;
+    ctx.strokeStyle=`rgba(255,255,255,${r.life*.5})`; ctx.lineWidth=1.5;
+    for(const off of [0,14]) if(r.r-off>0){ ctx.beginPath(); ctx.arc(r.x,r.y,r.r-off,0,TAU); ctx.stroke(); } }
+  for(const p of pads) p.draw(time);
+  requestAnimationFrame(frame);
+}
+
+renderSheet(); updateHud();
+openModal(`<h3>Day 1 login streak</h3><p>Here’s 1 free gem. Come back tomorrow for another gem, or every day for 30 days to unlock 2 gems.</p>`,
+  [{label:'Collect', primary:true, onClick:()=>{ closeModal(); say('Tap the water anytime to watch them feed', 3500); }}]);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
