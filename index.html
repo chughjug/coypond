@@ -38,6 +38,12 @@
   .vip { font-size:13px; font-weight:600; color:var(--gold); border:1.5px solid var(--gold); border-radius:6px; padding:0 5px; margin-left:4px; }
   .sub { font-size:14px; color:var(--caption); margin-top:2px; font-variant-numeric:tabular-nums; }
   .shopbtn { pointer-events:auto; padding:8px 16px; border-radius:20px; border:0; background:var(--accent); color:var(--accent-ink); font-weight:600; font-size:16px; }
+  .hudright { display:flex; flex-direction:column; align-items:flex-end; gap:5px; }
+  .minirow { display:flex; gap:5px; pointer-events:auto; }
+  .minirow button { padding:3px 9px; border-radius:12px; border:1px solid var(--caption); background:transparent;
+    color:var(--caption); font-size:12px; position:relative; }
+  .minirow button.alert::after { content:''; position:absolute; top:-2px; right:-2px; width:7px; height:7px;
+    border-radius:50%; background:var(--accent); }
   .caption { position:fixed; left:20px; right:20px; top:calc(max(12px,env(safe-area-inset-top)) + 76px);
     text-align:center; font-style:italic; font-size:17px; color:var(--caption); pointer-events:none; margin:0; }
 
@@ -152,6 +158,55 @@
   .turbo { position:fixed; z-index:12; left:50%; transform:translateX(-50%); bottom:calc(max(16px,env(safe-area-inset-bottom)) + 34px);
     padding:10px 18px; border-radius:20px; border:0; background:var(--accent); color:var(--accent-ink); font-weight:600; font-size:15px; }
   .turbo[hidden] { display:none; }
+
+  /* season pass */
+  .track { display:flex; gap:8px; overflow-x:auto; padding:4px 0 8px; scrollbar-width:none; }
+  .track::-webkit-scrollbar { display:none; }
+  .tierbox { flex:0 0 auto; width:76px; text-align:center; border:1.5px solid var(--line); border-radius:12px; padding:6px 4px; }
+  .tierbox.got { border-color:var(--win); }
+  .tierbox.now { border-color:var(--accent); box-shadow:inset 0 0 0 1.5px var(--accent); }
+  .tierbox b { display:block; font-size:12px; opacity:.6; font-variant-numeric:tabular-nums; }
+  .tierbox .free { font-size:12px; min-height:30px; display:flex; align-items:center; justify-content:center; }
+  .tierbox .prem { font-size:12px; min-height:30px; display:flex; align-items:center; justify-content:center;
+    border-top:1px dashed var(--line); margin-top:4px; padding-top:4px; color:var(--gold); }
+  .tierbox.locked .prem { opacity:.4; }
+  .bar { height:6px; border-radius:3px; background:var(--line); overflow:hidden; margin:6px 0 2px; }
+  .bar i { display:block; height:100%; background:var(--accent); }
+
+  /* quests */
+  .quest { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); }
+  .quest p { margin:2px 0 0; font-size:13px; opacity:.7; font-variant-numeric:tabular-nums; }
+  .quest button { flex:0 0 auto; padding:6px 10px; border-radius:10px; border:1.5px solid var(--accent); background:transparent; font-size:13px; }
+  .quest button:disabled { opacity:.3; }
+
+  /* interstitial */
+  .full { position:fixed; inset:0; z-index:40; background:#111; color:#eee; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; padding:24px; }
+  .full[hidden] { display:none; }
+  .full .big { font-size:40px; font-weight:700; color:#f5a623; margin:10px 0; }
+  .full small { opacity:.5; font-size:12px; }
+  .x { position:absolute; top:max(14px,env(safe-area-inset-top)); right:14px; width:18px; height:18px; line-height:16px;
+    border-radius:50%; border:1px solid #666; background:transparent; color:#888; font-size:11px; padding:0; }
+  .x[hidden] { display:none; }
+
+  /* consent + terms */
+  .toggles label { display:flex; justify-content:space-between; align-items:center; gap:10px;
+    padding:8px 0; border-bottom:1px solid var(--line); font-size:14px; }
+  .toggles span small { display:block; font-size:12px; opacity:.6; }
+  .scrollbox { max-height:180px; overflow-y:auto; border:1px solid var(--line); border-radius:10px;
+    padding:10px; font-size:12px; line-height:1.5; opacity:.85; }
+  .scrollbox p { margin:0 0 8px; }
+
+  /* loyalty + notifications */
+  .ladder div { display:flex; justify-content:space-between; gap:10px; font-size:14px; padding:5px 0;
+    border-bottom:1px solid var(--line); font-variant-numeric:tabular-nums; }
+  .ladder div.at { color:var(--accent); font-weight:600; }
+  .push { position:fixed; z-index:35; left:10px; right:10px; top:max(10px,env(safe-area-inset-top));
+    background:rgba(20,20,20,.92); color:#f2f2f2; border-radius:14px; padding:10px 12px; font-size:14px;
+    box-shadow:0 8px 24px rgba(0,0,0,.35); transform:translateY(-140%); transition:transform .3s ease; }
+  .push.show { transform:translateY(0); }
+  .push b { display:block; font-size:12px; opacity:.6; font-weight:400; }
+  @media (prefers-reduced-motion: reduce) { .push { transition:none; } }
 </style>
 </head>
 <body>
@@ -159,7 +214,12 @@
 <header class="hud">
   <div class="purse"><b id="coins">100</b> <span class="unit">coins</span><button class="addcoins" id="addCoins" aria-label="Buy coins">+</button><span class="vip" id="vipTag" hidden>VIP</span><span class="vip" id="whaleTag" hidden>Whale</span><button class="cashbtn" id="cashBtn">Cash out</button>
     <div class="sub" id="sub"></div></div>
-  <button class="shopbtn" id="shopBtn">Shop</button>
+  <div class="hudright">
+    <button class="shopbtn" id="shopBtn">Shop</button>
+    <div class="minirow">
+      <button id="passBtn">Pass</button><button id="questBtn">Quests</button>
+    </div>
+  </div>
 </header>
 <p class="caption" id="caption"></p>
 
@@ -181,6 +241,9 @@
 <div class="result" id="result" role="status" aria-live="polite"></div>
 <div class="ticker" aria-hidden="true"><span id="tickerText"></span></div>
 <button class="exitwatch" id="exitWatch" hidden>Back to betting</button>
+<div class="push" id="push" role="status"></div>
+<div class="full" id="full" hidden><button class="x" id="fullX" hidden aria-label="Close ad">✕</button>
+  <div id="fullBody"></div></div>
 <div class="backdrop" id="modal" hidden><div class="card" id="card" role="dialog" aria-modal="true"></div></div>
 <div class="toast" id="toast" role="status"></div>
 
@@ -218,9 +281,14 @@ let spent=0, whale=false, firstBuy=true, club=false, clubPrice=9.99, clubTimer=n
 let turboOwned=false, turbo=false, turboTimer=null;
 let races=0, pity=0, dupProt=false, creditExpires=0, creditTimer=null;
 let streakDay=1, lastSeen=0, limitSet=false, sessionStart=Date.now(), limitTimer=null;
-let departed=null, lastBet=null, lastFix=null, nearMiss=false, replayOf=null;
+let departed=null, lastFix=null, nearMiss=false, replayOf=null;
 let rivalScore=0, watching=false, watchTimer=null, pendingCollect=null;
 let coinBurst=[], slowFrames=0;
+// wave two
+let season={tier:0, xp:0, premium:false, ends:0, claimed:[]};
+let quests=[], questDay='', tierPoints=0, sinceAd=0;
+let consent=false, agreed=false, sound=true, oddsFmt='frac', abGroup='B';
+let referrals=0, declines=7, audio=null, pushTimer=null;
 const money = n => '$'+n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 const PACKS=[
   {name:'Pouch of coins', coins:500, price:0.99, note:'A little treat.'},
@@ -236,7 +304,8 @@ function save(){
   try { localStorage.setItem(SAVE, JSON.stringify({
     coins, gems, pellets, wins, losses, credit, scales, luckyOwned, vip, gemPrice, lossStreak, refillAt,
     spent, whale, firstBuy, club, clubPrice, turboOwned, races, pity, dupProt, creditExpires, streakDay,
-    limitSet, rivalScore, hats, feeds, departed, lastSeen:Date.now() })); } catch(e){}
+    limitSet, rivalScore, hats, feeds, departed, season, quests, questDay, tierPoints, consent, agreed,
+    sound, oddsFmt, abGroup, referrals, declines, sinceAd, lastSeen:Date.now() })); } catch(e){}
 }
 function load(){
   let d; try { d=JSON.parse(localStorage.getItem(SAVE)||'null'); } catch(e){}
@@ -252,6 +321,15 @@ function load(){
   turboOwned=!!d.turboOwned; dupProt=!!d.dupProt; limitSet=!!d.limitSet;
   Object.assign(hats, d.hats||{}); Object.assign(feeds, d.feeds||{});
   departed = typeof d.departed==='string' ? d.departed : null; lastSeen = num(d.lastSeen,0);
+  if(d.season && typeof d.season==='object') season={...season, ...d.season,
+    claimed: Array.isArray(d.season.claimed) ? d.season.claimed : []};
+  if(Array.isArray(d.quests)) quests=d.quests;
+  questDay = typeof d.questDay==='string' ? d.questDay : '';
+  tierPoints=num(d.tierPoints,tierPoints); sinceAd=num(d.sinceAd,sinceAd);
+  referrals=num(d.referrals,referrals); declines=num(d.declines,declines);
+  consent=!!d.consent; agreed=!!d.agreed; sound=d.sound!==false;
+  if(['frac','dec','amer'].includes(d.oddsFmt)) oddsFmt=d.oddsFmt;
+  if(typeof d.abGroup==='string') abGroup=d.abGroup;
   return true;
 }
 // stranded gems: packs come in tens, everything costs threes and fives
@@ -444,9 +522,9 @@ function renderSheet(){
   for(const k of koi){
     const b=document.createElement('button');
     b.setAttribute('aria-pressed', mode==='pond' ? true : pick===k);
-    const shown = (k.odds*boostMult()).toFixed(boosted?1:0);
+    const shown = oddsText(boosted ? Math.round(k.odds*boostMult()*10)/10 : k.odds);
     b.innerHTML=`<span class="swatch" style="background:${k.base}"><i style="background:${k.spot}"></i></span>${k.name}`+
-      (k.resting ? `<span class="rest">resting</span>` : `<span class="odds">${shown}:1</span>`);
+      (k.resting ? `<span class="rest">resting</span>` : `<span class="odds">${shown}</span>`);
     b.onclick=()=>{ if(k.resting) return energyDrink(k); if(mode==='pond') return; pick=k; renderSheet(); };
     list.appendChild(b);
   }
@@ -504,7 +582,9 @@ $('go').onclick=()=>{
   coins-=cost; pellets--;
   luckyThisRace = useLucky && luckyOwned>0; if(luckyThisRace) luckyOwned--; useLucky=false; insured=false;
   parlay = mode==='parlay' ? {leg:1, legs, insured:ins, pay:parlayPay(pick,legs,stake)} : null;
-  lastBet={mode, legs, stake, pickName:pick&&pick.name, boosted};
+  bump('bets'); bump('stake', cost);
+  if(mode==='parlay') bump('parlay');
+  if(mode==='pond') bump('pond');
   updateHud(); save(); state='armed'; $('sheet').classList.add('hidden');
   say(parlay ? `Leg 1 of ${legs}. Tap the water to drop the pellet`
     : mode==='pond' ? 'Tap the water. One of them is yours, and all of them are yours'
@@ -518,7 +598,7 @@ function updateHud(){
   const bits=[`${gems} ${gems===1?'gem':'gems'}`, `${pellets}/${MAX_PELLETS} pellets`];
   if(scales) bits.push(`${fmt(scales)} Koi Scales`);
   if(credit) bits.push(`${fmt(credit)} Pond Credit${creditExpires?` (expires in ${Math.max(0,Math.ceil((creditExpires-Date.now())/3600e3))}h)`:''}`);
-  bits.push(`day ${streakDay} streak`);
+  bits.push(`day ${streakDay} streak`, `pass tier ${season.tier}`, loyalty()[0]);
   if(spent) bits.push(`${money(spent)} pretend spent`);
   $('whaleTag').hidden=!whale;
   if(wins+losses) bits.push(`${wins} won, ${losses} lost`);
@@ -547,12 +627,14 @@ function raceOver(winner){
   }
 
   // a loss, celebrated
+  addXp(1);
   if(mode==='pond'){
-    const staked=pondTotal(stake), back=pondBack(stake);
-    coins+=back; wins++; lossStreak=0; celebrate();
+    const staked=pondTotal(stake), gross=pondBack(stake), fee=feeOn(gross), back=gross-fee;
+    coins+=back; wins++; lossStreak=0; celebrate(); fanfare();
     updateHud(); save();
     return showResult(`${winner.name} got there first — and you backed ${winner.name}!<strong class="w">+${fmt(back)}</strong>
-      <small>Every koi was yours, so this was a guaranteed win. Staked ${fmt(staked)}, returned ${fmt(back)}.</small>`, 3200, endRound);
+      <small>Every koi was yours, so this was a guaranteed win. Staked ${fmt(staked)}, returned ${fmt(gross)},
+        less a ${fmt(fee)} pond maintenance fee.</small>`, 3200, endRound);
   }
   if(parlay){
     const p=parlay;
@@ -563,9 +645,11 @@ function raceOver(winner){
       });
     }
     let html;
-    if(winner===pick){ coins+=stake+p.pay; wins++; html=`The whole parlay hit<strong class="w">+${fmt(p.pay)}</strong>`; }
+    if(winner===pick){ const fee=feeOn(p.pay); coins+=stake+p.pay-fee; wins++; celebrate(); fanfare();
+      html=`The whole parlay hit<strong class="w">+${fmt(p.pay-fee)}</strong>
+        <small>Less a ${fmt(fee)} pond maintenance fee. The fee applies to winnings only.</small>`; }
     else {
-      losses++; lossStreak++;
+      losses++; lossStreak++; bump('lose'); thud();
       const hit=p.leg-1, close = hit===p.legs-1;
       html=`${winner.name} got there first<strong class="l">−${stake}</strong><small>${close ? `${hit} of ${p.legs} legs hit. One fish away from ${fmt(p.pay)}!` : `Leg ${p.leg} missed.`}</small>`;
       if(p.insured && close){ grantCredit(stake);
@@ -578,12 +662,13 @@ function raceOver(winner){
   const cost=betCost();
   let html;
   if(winner===pick){
-    const basis=pick.pay*boostMult(), gross=Math.round(stake*basis);
-    coins+=cost+gross; wins++; lossStreak=0; celebrate();
-    html=`${winner.name} got there first<strong class="w">+${fmt(gross)}</strong>
-      <small>Paid at house basis ${basis.toFixed(boosted?1:0)}:1. Displayed odds are indicative.</small>${lucky}`;
+    const basis=pick.pay*boostMult(), gross=Math.round(stake*basis), fee=feeOn(gross);
+    coins+=cost+gross-fee; wins++; lossStreak=0; celebrate(); fanfare();
+    html=`${winner.name} got there first<strong class="w">+${fmt(gross-fee)}</strong>
+      <small>Paid at house basis ${oddsText(Math.round(basis*10)/10)}. Displayed odds are indicative.
+        Pond maintenance fee ${fmt(fee)}, charged on winnings only.</small>${lucky}`;
   } else {
-    losses++; lossStreak++;
+    losses++; lossStreak++; bump('lose'); nearMiss ? tease() : thud();
     const bigger=Math.max(50, stake*5);
     html=`${winner.name} got there first<strong class="l">−${fmt(cost)}</strong>
       ${nearMiss?`<small>Photo finish. ${pick.name} lost by half a length.</small>`:''}
@@ -611,6 +696,7 @@ function endRound(){
   if(coins<=0){ stopTurbo(); return setTimeout(brokeModal, 400); }
   if(races>0 && races%50===0){ stopTurbo(); return setTimeout(wrapped, 500); }
   if(lossStreak>=6 && !departed){ stopTurbo(); return setTimeout(fishLeaves, 500); }
+  if(maybeInterstitial()) return;
   if(turbo) return scheduleTurbo();
   if(lossStreak>0 && lossStreak%3===0) setTimeout(flashSale, 500);
 }
@@ -722,6 +808,7 @@ function playAd(stage, purpose){
     else { $('adTimer').textContent='Thanks for watching'; setButtons([{label: purpose==='collect' ? 'Collect your coins' : 'Collect 1 pellet',
       primary:true, onClick:()=>{
         closeModal();
+        bump('ad');
         if(purpose==='collect'){ const f=pendingCollect; pendingCollect=null; if(f) f(); }
         else { pellets=Math.min(MAX_PELLETS,pellets+1); save(); toast('+1 pellet'); }
       }}]); }
@@ -730,11 +817,12 @@ function playAd(stage, purpose){
 
 // free gems arrive at roughly one a day, minus the days you forget. the shop is honest about the wait
 const eta = g => `Free in ${fmt(Math.ceil(g*20.6))} days, or now for ${g} gems.`;
+const abMul = () => abGroup==='B' ? 1.15 : 1;        // there is no group A
 function openShop(){
-  const pack=gemPrice*12, SCALE_RATE=100, scaleBundle=5*SCALE_RATE;
+  const one=Math.ceil(gemPrice*abMul()), pack=Math.ceil(one*12), SCALE_RATE=100, scaleBundle=5*SCALE_RATE;
   const items=[
-    {name:'1 gem', desc:'The price goes up every time you buy. That’s just how gems work.', price:`${fmt(gemPrice)} coins`,
-      can:coins>=gemPrice, buy:()=>{ coins-=gemPrice; gems++; gemPrice=Math.ceil(gemPrice*1.15); }},
+    {name:'1 gem', desc:'The price goes up every time you buy. That’s just how gems work.',
+      price:`${fmt(one)} coins`, can:coins>=one, buy:()=>{ coins-=one; gems++; gemPrice=Math.ceil(gemPrice*1.15); }},
     {name:'Gem pack, 10 gems', desc:'Best value!* *Slightly worse value. Gems come in tens. Everything costs threes and fives.',
       price:`${fmt(pack)} coins`, can:coins>=pack, buy:()=>{ coins-=pack; gems+=10; gemPrice=Math.ceil(gemPrice*1.15); }},
     {name:'Convert Koi Scales', desc:`You have ${fmt(scales)}. Scales convert at ${SCALE_RATE}:1, in bundles of five gems only, so you need ${fmt(scaleBundle)}.`,
@@ -754,9 +842,12 @@ function openShop(){
     {name:'Pond Pass VIP', desc: vip ? 'You’re VIP. Your losses now have gold trim.' : `Gold trim on every loss. That’s the whole benefit. ${eta(20)}`,
       price: vip ? 'Owned' : '20 gems', can:!vip && gems>=20, buy:()=>{ spendGems(20); vip=true; }},
   ];
-  openModal(`<h3>Pond shop</h3><p class="fine">You have ${fmt(coins)} coins, ${gems} ${gems===1?'gem':'gems'}${scales?`, ${fmt(scales)} Koi Scales`:''}.</p>` +
+  openModal(`<h3>Pond shop</h3><p class="fine">You have ${fmt(coins)} coins, ${gems} ${gems===1?'gem':'gems'}${scales?`, ${fmt(scales)} Koi Scales`:''}.
+      You are in pricing experiment group ${abGroup}. Prices in group ${abGroup} are higher. This cannot be changed.</p>` +
     items.map((it,i)=>`<div class="item"><div><b>${it.name}</b><p>${it.desc}</p></div><button data-i="${i}" ${it.can?'':'disabled'}>${it.price}</button></div>`).join(''),
     [{label:'Leaderboard', onClick:leaderboard},
+     {label:`Loyalty — ${loyalty()[0]}`, onClick:openLadder},
+     {label:'Invite a friend', onClick:invite},
      {label:'Fairness & returns', onClick:fairness},
      {label:'Close', onClick:closeModal}]);
   $('card').querySelectorAll('.item button').forEach(b=>b.onclick=()=>{
@@ -772,7 +863,8 @@ function fairness(){
     <p class="big">Return to player: ${SHOWN_RATE_NOTE}</p>
     <p class="fine">“Up to” is doing all of the work in that sentence. Displayed odds are indicative and are not the
       basis on which winnings are paid. Races are not simulations of real koi.</p>`,
-    [{label:'View a race replay', onClick:()=>openModal(`<h3>Replay</h3>
+    [{label:'Odds disclosure', onClick:lootOdds},
+     {label:'View a race replay', onClick:()=>openModal(`<h3>Replay</h3>
         <p>Your koi swam toward the pellet at a normal speed and did not reach it first.</p>
         <p class="fine">Replays show the race as it was run.</p>`, [{label:'Back', onClick:fairness}])},
      {label:'Back to shop', primary:true, onClick:openShop}]);
@@ -797,7 +889,7 @@ function leaderboard(){
 
 const REEL=['Common','Common','Rare','Common','Legendary','Common','Rare','Common'];
 function hatchEgg(){
-  pity++;
+  pity++; bump('egg');
   openModal(`<h3>Hatching…</h3><div class="egg" aria-hidden="true">🥚</div>
     <div class="reel"><b id="reelText">Common</b></div>
     <p class="pity">Legendary guaranteed in ${fmt(Math.max(1, 847-pity))} eggs.</p>`, []);
@@ -854,10 +946,10 @@ function openStore(){
 function buyPack(pk, optIn){
   const doubled = firstBuy && pk.hot;
   const got = pk.coins*(doubled?2:1);
-  coins+=got; spent+=pk.price; firstBuy=false;
+  coins+=got; spent+=pk.price; firstBuy=false; tierPoints+=pk.price; bump('buy');
   if(pk.hot) whale=true;
   const joined = optIn && !club;
-  if(joined){ startClub(); spent+=clubPrice; }
+  if(joined){ startClub(); spent+=clubPrice; tierPoints+=clubPrice; }
   updateHud(); renderSheet(); save();
   openModal(`<h3>Purchase complete</h3><div class="receipt">
       <div><span>${pk.name}</span><span>+${fmt(got)} coins</span></div>
@@ -957,13 +1049,20 @@ function responsible(){
     {label:'Close', primary:true, onClick:closeModal}]);
 }
 function settings1(){
-  openModal(`<h3>Account settings</h3><p class="fine">Pond name, notifications, preferences.</p>`, [
+  openModal(`<h3>Account settings</h3><p class="fine">Pond name, notifications, data, preferences.</p>`, [
     {label:'Notifications', onClick:()=>{ toast('Notifications are on. There is no way to turn them off.'); }},
+    {label:'Download your data', onClick:myData},
     {label:'Preferences', onClick:settings2},
+    {label:'Delete your pond', tiny:true, onClick:deleteAccount},
     {label:'Back', onClick:responsible}]);
 }
+const FMTS={frac:'Fractional (9:1)', dec:'Decimal (9.50)', amer:'American (+900)'};
 function settings2(){
-  openModal(`<h3>Preferences</h3><p class="fine">Water clarity, fish names, limits.</p>`, [
+  openModal(`<h3>Preferences</h3><p class="fine">Sound, odds format, limits.</p>`, [
+    {label:`Sound: ${sound?'on':'off'}`, onClick:()=>{ sound=!sound; save(); if(sound) tone(660,.1); settings2(); }},
+    {label:`Odds format: ${FMTS[oddsFmt]}`, onClick:()=>{
+      oddsFmt = oddsFmt==='frac' ? 'dec' : oddsFmt==='dec' ? 'amer' : 'frac';
+      save(); renderSheet(); settings2(); }},
     {label:'Limits', onClick:limits},
     {label:'Back', onClick:settings1}]);
 }
@@ -1046,9 +1145,11 @@ function welcomeBack(){
   const away=Date.now()-lastSeen, days=Math.floor(away/864e5), hours=Math.floor(away/36e5);
   const earned=Math.min(400, Math.floor(hours*20)), upkeep=Math.min(coins, days*80);
   if(hours<1) return dailyStreak(false);
+  const demoted=decayLoyalty(days), nowTier=loyalty()[0];
   openModal(`<h3>Welcome back</h3>
     <p>Your pond earned <b>${fmt(earned)} coins</b> while you were away${days?`, and ate ${fmt(upkeep)} in feed`:''}.</p>
-    ${days?`<p class="fine">Upkeep is charged whether or not you are here. The koi do not know you are gone.</p>`:''}`, [
+    ${days?`<p class="fine">Upkeep is charged whether or not you are here. The koi do not know you are gone.</p>`:''}
+    ${demoted?`<p class="fine">Your loyalty points decayed while you were away. You are now ${nowTier}.</p>`:''}`, [
     {label:'Watch an ad to collect', primary:true, onClick:()=>{
       pendingCollect=()=>{ coins+=earned; coins=Math.max(0,coins-upkeep); updateHud(); renderSheet(); save();
         toast(`+${fmt(earned)} coins${upkeep?`, −${fmt(upkeep)} upkeep`:''}`); dailyStreak(days>0); };
@@ -1074,6 +1175,325 @@ function welcomeGem(){
     [{label:'Collect', primary:true, onClick:()=>{ gems++; updateHud(); renderSheet(); save(); closeModal();
       say('Tap the water anytime to watch them feed', 3500); }}]);
 }
+
+// ---- sound: the celebration is the same size whatever the number is ----
+function tone(freq, dur, type='sine', gain=.07, slide=0){
+  if(!sound) return;
+  try{
+    audio = audio || new (window.AudioContext||window.webkitAudioContext)();
+    if(audio.state==='suspended') audio.resume();
+    const t=audio.currentTime, o=audio.createOscillator(), g=audio.createGain();
+    o.type=type; o.frequency.setValueAtTime(freq,t);
+    if(slide) o.frequency.linearRampToValueAtTime(Math.max(40,freq+slide), t+dur);
+    g.gain.setValueAtTime(gain,t); g.gain.exponentialRampToValueAtTime(.0001, t+dur);
+    o.connect(g); g.connect(audio.destination); o.start(t); o.stop(t+dur);
+  }catch(e){}
+}
+const fanfare = () => [523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,.28,'triangle',.08), i*85));
+const thud    = () => tone(140,.14,'sine',.05,-40);
+const tease   = () => tone(420,.7,'sawtooth',.045,520);   // rises, then simply stops
+
+// ---- odds, in three formats, none of which agree ----
+function oddsText(n){
+  if(oddsFmt==='dec')  return (n+0.5).toFixed(2);
+  if(oddsFmt==='amer') return '+'+fmt(Math.round(n*100));
+  return `${Number.isInteger(n)?n:n.toFixed(1)}:1`;
+}
+const FEE=0.05;                                           // levied on winnings only
+const feeOn = g => Math.round(g*FEE);
+
+// ---- season pass ----
+const SEASON_LEN=14*864e5, TIER_XP=4, MAX_TIER=50, FREE_TIER=40, PASS_PRICE=25;
+const premReward = t => t%10===0 ? 'Hat' : t%5===0 ? '2 gems' : t%2===0 ? '100 coins' : '1 gem';
+const freeReward = t => t===FREE_TIER ? 'Hat' : '—';
+function seasonCheck(){
+  if(!season.ends){ season.ends=Date.now()+SEASON_LEN; return; }
+  if(Date.now()<=season.ends) return;
+  const lost=season.tier, unclaimed=lost-season.claimed.length;
+  season={tier:0, xp:0, premium:false, ends:Date.now()+SEASON_LEN, claimed:[]};
+  save();
+  if(lost>0) openModal(`<h3>Season over</h3>
+    <p>You reached tier ${lost} of ${MAX_TIER}. ${unclaimed>0?`${unclaimed} unclaimed rewards have expired.`:''}</p>
+    <p class="fine">Progress does not carry over. The next season is the same length and starts now.</p>`,
+    [{label:'Start the new season', primary:true, onClick:closeModal}]);
+}
+function addXp(n){
+  if(season.tier>=MAX_TIER) return;
+  season.xp+=n;
+  while(season.xp>=TIER_XP && season.tier<MAX_TIER){ season.xp-=TIER_XP; season.tier++; }
+  markAlerts();
+}
+function openPass(){
+  seasonCheck();
+  const left=Math.max(0, season.ends-Date.now()), d=Math.floor(left/864e5), h=Math.floor(left/36e5)%24;
+  const owed=season.premium ? season.tier-season.claimed.length : 0;
+  const from=Math.max(1, season.tier-1), boxes=[];
+  for(let t=from; t<from+7 && t<=MAX_TIER; t++){
+    const got=t<=season.tier, cl=`tierbox${got?' got':''}${t===season.tier+1?' now':''}${season.premium?'':' locked'}`;
+    boxes.push(`<div class="${cl}"><b>${t}</b><div class="free">${freeReward(t)}</div><div class="prem">${premReward(t)}</div></div>`);
+  }
+  openModal(`<h3>Pond Pass — Season 1</h3>
+    <p class="fine">Ends in ${d}d ${h}h. Unclaimed rewards expire when it does.</p>
+    <div class="bar"><i style="width:${Math.round(season.xp/TIER_XP*100)}%"></i></div>
+    <p class="fine">Tier ${season.tier} of ${MAX_TIER} · ${season.xp}/${TIER_XP} to the next · one race is one point.</p>
+    <div class="track">${boxes.join('')}</div>
+    <p class="fine">Top row is the free track. It has one reward, at tier ${FREE_TIER}.
+      Bottom row is the premium track${season.premium?'.':', which you do not have.'}</p>`, [
+    ...(season.premium ? [] : [{label:`Unlock Premium Pond Pass — ${PASS_PRICE} gems`, primary:true, disabled:gems<PASS_PRICE,
+      onClick:()=>{ spendGems(PASS_PRICE); season.premium=true; save(); updateHud(); openPass(); }}]),
+    ...(owed>0 ? [{label:`Claim ${owed} ${owed===1?'reward':'rewards'}`, primary:true, onClick:claimPass}] : []),
+    {label:'Buy 5 tiers — 10 gems', disabled:gems<10 || season.tier>=MAX_TIER, onClick:()=>{
+      spendGems(10); season.tier=Math.min(MAX_TIER, season.tier+5); save(); updateHud(); openPass(); }},
+    {label:'Close', onClick:closeModal}]);
+}
+function claimPass(){
+  let got=0, coinsGot=0;
+  for(let t=1; t<=season.tier; t++){
+    if(season.claimed.includes(t)) continue;
+    season.claimed.push(t);
+    const r=premReward(t);
+    if(r==='1 gem') gems+=1; else if(r==='2 gems') gems+=2;
+    else if(r==='100 coins'){ coins+=100; coinsGot+=100; }
+    else { const k=koi[Math.floor(Math.random()*koi.length)]; if(k) hats[k.name]=['#4f86c6','#d14b7a','#3fa36b'][Math.floor(Math.random()*3)]; }
+    got++;
+  }
+  save(); updateHud(); renderSheet();
+  toast(`Claimed ${got} ${got===1?'reward':'rewards'}${coinsGot?`, including ${fmt(coinsGot)} coins`:''}.`);
+  openPass();
+}
+
+// ---- daily quests ----
+const QUEST_POOL=[
+  {id:'bets',  label:'Place 10 bets',               target:10,  reward:1},
+  {id:'stake', label:'Stake 500 coins',             target:500, reward:1},
+  {id:'lose',  label:'Lose 5 races',                target:5,   reward:2},
+  {id:'parlay',label:'Place a parlay',              target:1,   reward:1},
+  {id:'pond',  label:'Feed the whole pond 3 times', target:3,   reward:1},
+  {id:'egg',   label:'Open a mystery egg',          target:1,   reward:1},
+  {id:'ad',    label:'Watch 2 ads',                 target:2,   reward:1},
+  {id:'buy',   label:'Make a purchase',             target:1,   reward:3},
+];
+function rollQuests(){
+  const day=new Date().toDateString();
+  if(questDay===day && quests.length) return;
+  questDay=day;
+  quests=[...QUEST_POOL].sort(()=>Math.random()-.5).slice(0,3).map(q=>({...q, n:0, claimed:false}));
+  save(); markAlerts();
+}
+function bump(id, n=1){
+  const q=quests.find(q=>q.id===id);
+  if(!q || q.claimed || q.n>=q.target) return;
+  q.n=Math.min(q.target, q.n+n);
+  if(q.n>=q.target) toast(`Quest complete: ${q.label}`);
+  markAlerts(); save();
+}
+function openQuests(){
+  rollQuests();
+  const rows=quests.map((q,i)=>`<div class="quest"><div><b>${q.label}</b>
+      <p>${fmt(q.n)} / ${fmt(q.target)} · ${q.reward} ${q.reward===1?'gem':'gems'}</p></div>
+      <button data-i="${i}" ${q.claimed?'disabled':q.n>=q.target?'':'disabled'}>${q.claimed?'Claimed':'Claim'}</button></div>`).join('');
+  openModal(`<h3>Today's quests</h3>${rows}
+    <p class="fine" style="margin-top:10px">Quests reset at midnight. Unfinished quests do not carry over,
+      and neither does the part you finished.</p>`, [
+    {label:'Reroll one quest — 3 gems', disabled:gems<3, onClick:()=>{
+      spendGems(3);
+      const i=Math.floor(Math.random()*quests.length);
+      const pool=QUEST_POOL.filter(q=>!quests.some(x=>x.id===q.id));
+      quests[i]={...(pool[Math.floor(Math.random()*pool.length)]||QUEST_POOL[0]), n:0, claimed:false};
+      save(); updateHud(); openQuests(); }},
+    {label:'Close', onClick:closeModal}]);
+  $('card').querySelectorAll('.quest button').forEach(b=>b.onclick=()=>{
+    const q=quests[+b.dataset.i];
+    if(!q || q.claimed || q.n<q.target) return;
+    q.claimed=true; gems+=q.reward; save(); updateHud(); renderSheet();
+    toast(`+${q.reward} ${q.reward===1?'gem':'gems'}`); openQuests();
+  });
+}
+function markAlerts(){
+  const qReady = quests.some(q=>!q.claimed && q.n>=q.target);
+  const pReady = season.premium && season.tier>season.claimed.length;
+  $('questBtn').classList.toggle('alert', qReady);
+  $('passBtn').classList.toggle('alert', pReady);
+}
+
+// ---- loyalty, which decays ----
+const LADDER=[['Minnow',0],['Bronze Koi',10],['Silver Koi',40],['Gold Koi',120],['Diamond Koi',400]];
+const PERKS={'Minnow':'No benefits. You are a minnow.',
+  'Bronze Koi':'A bronze dot next to your name, which nobody else can see.',
+  'Silver Koi':'Early access to offers, four seconds early.',
+  'Gold Koi':'A dedicated account manager. They are not real.',
+  'Diamond Koi':'Everything above, in diamond.'};
+function loyalty(){ let t=LADDER[0]; for(const l of LADDER) if(tierPoints>=l[1]) t=l; return t; }
+function decayLoyalty(days){
+  if(days<=0 || tierPoints<=0) return 0;
+  const was=loyalty()[0], before=tierPoints;
+  tierPoints=Math.round(tierPoints*Math.pow(.9,days)*100)/100;
+  return was!==loyalty()[0] ? before : 0;
+}
+function openLadder(){
+  const [name]=loyalty();
+  openModal(`<h3>Pond loyalty</h3><p class="big">${name}</p><p class="fine">${PERKS[name]}</p>
+    <div class="ladder">${LADDER.map(([n,p])=>`<div class="${n===name?'at':''}"><span>${n}</span><span>${fmt(p)} pts</span></div>`).join('')}</div>
+    <p class="fine" style="margin-top:10px">You have ${tierPoints.toFixed(2)} points. One point per pretend dollar.
+      Points decay by 10% for every day you do not spend. Tiers are not kept, only rented.</p>`,
+    [{label:'Earn points', primary:true, onClick:openStore}, {label:'Close', onClick:closeModal}]);
+}
+
+// ---- interstitials ----
+function maybeInterstitial(){
+  if(++sinceAd < 7) return false;
+  sinceAd=0; save(); interstitial(); return true;
+}
+function interstitial(){
+  const failed=chance(.34), ad=ADS[Math.floor(Math.random()*ADS.length)];
+  $('fullBody').innerHTML = failed
+    ? `<small>Advertisement</small><div class="big">⟳</div><p>This ad could not be loaded.</p>
+       <small>It still counts as watched.</small>`
+    : `<small>Advertisement</small><div class="big">${ad[0]}</div><p>${ad[1]}</p>
+       <small>You are seeing this because you played a game.</small>`;
+  $('full').hidden=false; $('fullX').hidden=true;
+  setTimeout(()=>{ const x=$('fullX'); if(x) x.hidden=false; }, reduceMotion ? 1200 : 5000);
+}
+$('fullX').onclick=()=>{ $('full').hidden=true; bump('ad'); if(turbo && state==='betting') scheduleTurbo(); };
+
+// ---- notifications you cannot decline ----
+const PUSHES=['Hana misses you.','Your pellets are full. They will not stay full.',
+  'Kenji_84 has passed you again.','Your offer expires in four minutes.',
+  'You have unclaimed rewards. You do not, but you might.','Someone fed your koi. It was us.',
+  'We noticed you stopped. We notice everything.'];
+function pushNote(text){
+  const el=$('push');
+  el.innerHTML=`<b>Koi Pond Stakes · now</b>${text}`;
+  el.classList.add('show'); tone(880,.08,'sine',.04);
+  clearTimeout(pushTimer); pushTimer=setTimeout(()=>el.classList.remove('show'), 4200);
+}
+function startPush(){
+  setInterval(()=>{ if(!document.hidden && !watching) pushNote(PUSHES[Math.floor(Math.random()*PUSHES.length)]); }, 47000);
+  pushNote('Notifications are on. There is no way to turn them off.');
+}
+function askPush(){
+  openModal(`<h3>Allow notifications?</h3>
+    <p>Koi Pond Stakes would like to send you notifications about races, offers, and koi who are thinking about you.</p>
+    <p class="fine">You can change this later in settings, where there is no setting for it.</p>`, [
+    {label:'Allow', primary:true, onClick:()=>{ closeModal(); startPush(); }},
+    {label:'Ask me later', onClick:()=>{ closeModal(); setTimeout(()=>{ if($('modal').hidden) askPush(); }, 45000); }}]);
+}
+
+// ---- consent ----
+function cookies(then){
+  const done=msg=>{ consent=true; save(); closeModal(); if(msg) toast(msg); then(); };
+  openModal(`<h3>We value your privacy</h3>
+    <p class="fine">We and 1,431 partners store and access information on your pond.</p>
+    <div class="toggles">
+      <label><span>Strictly necessary<small>Required to run the pond.</small></span><input type="checkbox" checked disabled></label>
+      <label><span>Performance<small>How long you look at each thing.</small></span><input type="checkbox" checked></label>
+      <label><span>Personalisation<small>Which offer works on you.</small></span><input type="checkbox" checked></label>
+      <label><span>Legitimate interest<small>Cannot be switched off. Here is a switch.</small></span><input type="checkbox" id="li" checked></label>
+    </div>`, [
+    {label:'Accept all', primary:true, onClick:()=>done()},
+    {label:'Save preferences', onClick:()=>done('Preferences saved. (Accepted.)')},
+    {label:'Reject all', tiny:true, onClick:()=>done('Preferences saved. (Accepted.)')}]);
+  const li=$('li');
+  if(li) li.onchange=()=>{ if(!li.checked) setTimeout(()=>{ if($('li')){ $('li').checked=true;
+    toast('Legitimate interest cannot be switched off.'); } }, 900); };
+}
+
+// ---- terms ----
+const TOS=`<p>1. By tapping water you enter into an agreement with the pond.</p>
+  <p>2. The koi are not real. You agree that you already knew this, and waive any claim arising from
+     having briefly forgotten it.</p>
+  <p>3. Coins, gems, Koi Scales and Pond Credit have no value. This includes the value at which they are sold.</p>
+  <p>4. Displayed odds are indicative. The basis on which winnings are paid is the basis on which winnings are paid.</p>
+  <p>5. We may change these terms at any time. You agree in advance to the terms as changed, including terms
+     not yet written, and to any pond they are later applied to.</p>
+  <p>6. Disputes will be resolved by binding arbitration in a venue of our choosing, which is this pond.</p>
+  <p>7. You may opt out of clause 6 by writing to us within 30 days of a date we have not specified.</p>
+  <p>8. Your continued enjoyment constitutes acceptance. Your lack of enjoyment also constitutes acceptance.</p>
+  <p>9. Nothing in these terms affects your statutory rights, which do not apply here.</p>
+  <p>10. Thank you for reading the terms. Nobody reads the terms. We checked.</p>`;
+function terms(then){
+  const accept=()=>{ agreed=true; save(); closeModal(); then(); };
+  openModal(`<h3>Terms of service</h3><div class="scrollbox" id="tosBox">${TOS}</div>
+    <p class="fine" id="tosHint">Scroll to the end to continue.</p>`,
+    [{label:'I agree', primary:true, disabled:true, onClick:accept}]);
+  const box=$('tosBox');
+  box.onscroll=()=>{
+    if(box.scrollTop + box.clientHeight < box.scrollHeight - 8) return;
+    box.onscroll=null;
+    $('tosHint').textContent='Thank you for reading the terms.';
+    setButtons([{label:'I agree', primary:true, onClick:accept},
+      {label:'I do not agree', tiny:true, onClick:()=>{ toast('Noted. Continuing.'); accept(); }}]);
+  };
+}
+
+// ---- your data, and the leaving of ----
+function myData(){
+  openModal(`<h3>Download your data</h3><div class="scrollbox">
+    <p>races_watched: ${fmt(races)}</p><p>races_won: ${fmt(wins)}</p><p>races_lost: ${fmt(losses)}</p>
+    <p>coins_held: ${fmt(coins)}</p><p>pretend_spent: ${money(spent)}</p><p>login_streak: ${streakDay}</p>
+    <p>loyalty_points: ${tierPoints.toFixed(2)}</p><p>hats_owned: ${Object.keys(hats).length}</p>
+    <p>eggs_opened: ${pity}</p><p>inferred_susceptibility: high</p>
+    <p>inferred_region: the one with the higher prices</p><p>partners_shared_with: 1,431</p></div>
+    <p class="fine" style="margin-top:10px">A full export will be prepared and sent within 30 days.</p>`, [
+    {label:'Request full export', primary:true, onClick:()=>{ toast('Requested. It will arrive within 30 days.'); }},
+    {label:'Back', onClick:settings1}]);
+}
+function deleteAccount(){
+  openModal(`<h3>Delete your pond</h3><p>This removes your coins, your hats, your streak, and ${koi.length} koi
+    who have done nothing wrong.</p>`, [
+    {label:'Download your data first', onClick:myData},
+    {label:'Continue', onClick:del2},
+    {label:'Keep my pond', primary:true, onClick:closeModal}]);
+}
+function del2(){
+  openModal(`<h3>Tell us why</h3><p>Help us understand. This will not change anything.</p>`, [
+    {label:'Too expensive', onClick:del3}, {label:'Not expensive enough', onClick:del3},
+    {label:'I kept losing', onClick:()=>{ toast('That is the game working correctly.'); del3(); }},
+    {label:'Go back', onClick:closeModal}]);
+}
+function del3(){
+  openModal(`<h3>Before you go</h3><p class="big">500 coins, free</p>
+    <p>Stay, and we will say no more about it.</p>`, [
+    {label:'Take the coins', primary:true, onClick:()=>{ coins+=500; save(); updateHud(); renderSheet();
+      closeModal(); toast('+500 coins. We are glad you stayed.'); }},
+    {label:'Delete anyway', tiny:true, onClick:del4}]);
+}
+function del4(){
+  openModal(`<h3>Deletion scheduled</h3>
+    <p>Your pond will be deleted in 30 days, unless you log in during that period.</p>
+    <p class="fine">You are logged in.</p>`, [
+    {label:'Understood', primary:true, onClick:closeModal},
+    {label:'Delete it now, properly', tiny:true, onClick:()=>{
+      try{ localStorage.removeItem(SAVE); }catch(e){}
+      openModal(`<h3>Deleted</h3><p>Your pond is gone. Reload to start a new one, at day 1, with 100 coins.</p>
+        <p class="fine">Your 1,431 partners have been notified, and will keep their copies.</p>`,
+        [{label:'Close', primary:true, onClick:closeModal}]); }}]);
+}
+
+// ---- invite a friend ----
+function invite(){
+  openModal(`<h3>Invite a friend</h3>
+    <p>You both get 50 coins. They get theirs when they spend ${money(4.99)}.</p>
+    <p class="fine">${referrals} accepted · ${declines} declined</p>`, [
+    {label:'Share your pond', primary:true, onClick:()=>{
+      declines++; save(); toast('Shared with nobody. Another friend declined.'); invite(); }},
+    {label:'Close', onClick:closeModal}]);
+}
+
+// ---- the odds nobody discloses, disclosed ----
+function lootOdds(){
+  openModal(`<h3>Odds disclosure</h3>
+    <div class="lb"><div><span>Common hat</span><span>90.0%</span></div>
+      <div><span>Rare hat</span><span>9.9%</span></div>
+      <div><span>Legendary hat</span><span>0.1%</span></div>
+      <div><span>Other</span><span>4.0%</span></div></div>
+    <p class="fine" style="margin-top:10px">Percentages are indicative and may not total 100%.
+      A Legendary is guaranteed within 847 eggs, counted from a number we do not show you.</p>`,
+    [{label:'Back to shop', primary:true, onClick:openShop}, {label:'Close', onClick:closeModal}]);
+}
+
+$('passBtn').onclick=openPass;
+$('questBtn').onclick=openQuests;
 
 // ---- input ----
 function dropPellet(x,y){
@@ -1129,13 +1549,19 @@ if(turboOwned) turbo=false;
 addEventListener('visibilitychange', ()=>{ if(document.hidden){ stopTurbo(); save(); } });
 addEventListener('pagehide', save);
 
-openModal(`<h3>Koi Pond Stakes</h3>
-  <p class="fine">This game does not offer real money gambling, and does not predict success at real money gambling.
-    No real money, card or checkout appears anywhere in it. Everything it does to you, it does for free.</p>`, [
-  {label:'I understand', primary:true, onClick:()=>{
-    closeModal();
-    if(returning && lastSeen) welcomeBack(); else welcomeGem();
-  }}]);
+seasonCheck(); rollQuests(); markAlerts();
+
+const onboarding = [
+  next => consent ? next() : cookies(next),
+  next => agreed  ? next() : terms(next),
+  next => openModal(`<h3>Koi Pond Stakes</h3>
+    <p class="fine">This game does not offer real money gambling, and does not predict success at real money gambling.
+      No real money, card or checkout appears anywhere in it. Everything it does to you, it does for free.</p>`,
+    [{label:'I understand', primary:true, onClick:()=>{ closeModal(); next(); }}]),
+  next => { if(returning && lastSeen) welcomeBack(); else welcomeGem(); setTimeout(next, 1200); },
+  () => setTimeout(()=>{ if($('modal').hidden) askPush(); }, 25000),
+];
+(function run(i){ if(i<onboarding.length) onboarding[i](()=>run(i+1)); })(0);
 requestAnimationFrame(frame);
 </script>
 </body>
