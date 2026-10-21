@@ -38,7 +38,7 @@
   .vip { font-size:13px; font-weight:600; color:var(--gold); border:1.5px solid var(--gold); border-radius:6px; padding:0 5px; margin-left:4px; }
   .sub { font-size:14px; color:var(--caption); margin-top:2px; font-variant-numeric:tabular-nums; }
   .shopbtn { pointer-events:auto; padding:8px 16px; border-radius:20px; border:0; background:var(--accent); color:var(--accent-ink); font-weight:600; font-size:16px; }
-  .caption { position:fixed; left:20px; right:20px; top:calc(max(12px,env(safe-area-inset-top)) + 70px);
+  .caption { position:fixed; left:20px; right:20px; top:calc(max(12px,env(safe-area-inset-top)) + 76px);
     text-align:center; font-style:italic; font-size:17px; color:var(--caption); pointer-events:none; margin:0; }
 
   .sheet { position:fixed; z-index:10; left:0; right:0; bottom:0; background:var(--sheet); color:var(--sheet-ink);
@@ -111,12 +111,53 @@
     background:var(--ink); color:var(--water-deep); padding:10px 16px; border-radius:12px; font-size:15px; opacity:0; transition:opacity .25s; pointer-events:none; max-width:86vw; text-align:center; }
   .toast.show { opacity:1; }
   @media (prefers-reduced-motion: reduce) { .sheet, .result, .toast { transition:none; } .egg { animation:none; } }
+
+  /* ticker of other people's good fortune */
+  .ticker { position:fixed; z-index:5; left:0; right:0; bottom:0; height:24px; overflow:hidden;
+    background:rgba(0,0,0,.18); font-size:13px; color:var(--caption); pointer-events:none; }
+  .ticker span { position:absolute; white-space:nowrap; line-height:24px; padding-left:100vw; animation:slide 26s linear infinite; }
+  @keyframes slide { to { transform:translateX(-100%); } }
+  @media (prefers-reduced-motion: reduce) { .ticker span { animation:none; padding-left:12px; } }
+  /* the fine print, where the fine print goes */
+  .smallprint { display:flex; justify-content:space-between; gap:10px; margin-top:10px; }
+  .smallprint button { font-size:11px; opacity:.45; background:transparent; border:0; padding:2px;
+    text-decoration:underline; }
+  body.watching .hud, body.watching .sheet, body.watching .ticker, body.watching .caption { display:none; }
+  .exitwatch { position:fixed; z-index:12; left:50%; transform:translateX(-50%);
+    bottom:calc(max(16px,env(safe-area-inset-bottom)) + 12px); font-size:12px; opacity:.5;
+    background:transparent; border:0; text-decoration:underline; padding:6px 10px; }
+  .exitwatch[hidden] { display:none; }
+  .cashbtn { pointer-events:auto; margin-left:6px; font-size:11px; padding:2px 7px; border-radius:10px;
+    border:1px solid var(--caption); background:transparent; color:var(--caption); vertical-align:3px; }
+
+  /* loot reel */
+  .reel { height:46px; overflow:hidden; text-align:center; border-top:1px solid var(--line); border-bottom:1px solid var(--line); margin:10px 0; }
+  .reel b { display:block; line-height:46px; font-size:22px; font-weight:600; }
+  .pity { font-size:12px; opacity:.6; text-align:center; font-variant-numeric:tabular-nums; }
+
+  /* leaderboard */
+  .lb div { display:flex; justify-content:space-between; gap:10px; font-size:15px; padding:5px 0;
+    border-bottom:1px solid var(--line); font-variant-numeric:tabular-nums; }
+  .lb div.you { font-weight:600; color:var(--accent); }
+  .lb div.rival b { font-weight:600; }
+
+  /* wrapped */
+  .wrapped { background:linear-gradient(150deg,#6d28a8,#c9461a 70%); color:#fff; margin:-20px -20px 12px; padding:22px 20px; border-radius:20px 20px 0 0; }
+  .wrapped h3 { margin:0 0 4px; font-size:26px; }
+  .wrapped .stat { font-size:34px; font-weight:700; font-variant-numeric:tabular-nums; line-height:1.1; }
+  .wrapped p { margin:2px 0 0; font-size:14px; opacity:.9; }
+
+  .rest { font-size:11px; color:var(--lose); }
+  .dim { opacity:.45; }
+  .turbo { position:fixed; z-index:12; left:50%; transform:translateX(-50%); bottom:calc(max(16px,env(safe-area-inset-bottom)) + 34px);
+    padding:10px 18px; border-radius:20px; border:0; background:var(--accent); color:var(--accent-ink); font-weight:600; font-size:15px; }
+  .turbo[hidden] { display:none; }
 </style>
 </head>
 <body>
 <canvas id="pond" aria-label="Koi pond"></canvas>
 <header class="hud">
-  <div class="purse"><b id="coins">100</b> <span class="unit">coins</span><button class="addcoins" id="addCoins" aria-label="Buy coins">+</button><span class="vip" id="vipTag" hidden>VIP</span><span class="vip" id="whaleTag" hidden>Whale</span>
+  <div class="purse"><b id="coins">100</b> <span class="unit">coins</span><button class="addcoins" id="addCoins" aria-label="Buy coins">+</button><span class="vip" id="vipTag" hidden>VIP</span><span class="vip" id="whaleTag" hidden>Whale</span><button class="cashbtn" id="cashBtn">Cash out</button>
     <div class="sub" id="sub"></div></div>
   <button class="shopbtn" id="shopBtn">Shop</button>
 </header>
@@ -130,9 +171,16 @@
   <div class="row" id="amounts"></div>
   <div class="row" id="extras"></div>
   <button class="go" id="go" disabled>Pick a koi</button>
+  <div class="smallprint">
+    <button id="watchBtn">Just watch the fish</button>
+    <button id="footBtn">Play responsibly</button>
+  </div>
 </section>
 
+<button class="turbo" id="turboBtn" hidden>Stop turbo pond</button>
 <div class="result" id="result" role="status" aria-live="polite"></div>
+<div class="ticker" aria-hidden="true"><span id="tickerText"></span></div>
+<button class="exitwatch" id="exitWatch" hidden>Back to betting</button>
 <div class="backdrop" id="modal" hidden><div class="card" id="card" role="dialog" aria-modal="true"></div></div>
 <div class="toast" id="toast" role="status"></div>
 
@@ -158,13 +206,21 @@ const PATTERNS = [
 function lerpAngle(a,b,t){ const d=((b-a+Math.PI)%TAU+TAU)%TAU-Math.PI; return a+d*t; }
 
 // ---- economy ----
-let coins=100, gems=1, pellets=5, wins=0, losses=0, credit=0;
+let coins=100, gems=0, pellets=5, wins=0, losses=0, credit=0, scales=0;
 let luckyOwned=0, useLucky=false, luckyThisRace=false, vip=false, insured=false, gemPrice=10, lossStreak=0;
-const MAX_PELLETS=5, refillAt=Date.now()+4*3600e3, hats={};
-let mode='single', legs=3, parlay=null;
+const MAX_PELLETS=5, REST_AT=12, hats={}, feeds={};
+let refillAt=Date.now()+4*3600e3;
+let mode='single', legs=3, parlay=null, boosted=false;
 let pick=null, stake=10, state='betting', fixed='lose'; // betting | armed | racing | result
-const WIN_RATE=0.1;
+const WIN_RATE=0.1;          // the real one
+const SHOWN_RATE_NOTE='up to 98%';  // the other one
 let spent=0, whale=false, firstBuy=true, club=false, clubPrice=9.99, clubTimer=null;
+let turboOwned=false, turbo=false, turboTimer=null;
+let races=0, pity=0, dupProt=false, creditExpires=0, creditTimer=null;
+let streakDay=1, lastSeen=0, limitSet=false, sessionStart=Date.now(), limitTimer=null;
+let departed=null, lastBet=null, lastFix=null, nearMiss=false, replayOf=null;
+let rivalScore=0, watching=false, watchTimer=null, pendingCollect=null;
+let coinBurst=[], slowFrames=0;
 const money = n => '$'+n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 const PACKS=[
   {name:'Pouch of coins', coins:500, price:0.99, note:'A little treat.'},
@@ -174,6 +230,35 @@ const PACKS=[
 ];
 const AMOUNTS=[10,25,50,'All in'];
 
+// ---- save file (the sunk cost is the product) ----
+const SAVE='koipondstakes.v1';
+function save(){
+  try { localStorage.setItem(SAVE, JSON.stringify({
+    coins, gems, pellets, wins, losses, credit, scales, luckyOwned, vip, gemPrice, lossStreak, refillAt,
+    spent, whale, firstBuy, club, clubPrice, turboOwned, races, pity, dupProt, creditExpires, streakDay,
+    limitSet, rivalScore, hats, feeds, departed, lastSeen:Date.now() })); } catch(e){}
+}
+function load(){
+  let d; try { d=JSON.parse(localStorage.getItem(SAVE)||'null'); } catch(e){}
+  if(!d) return false;
+  const num=(v,f)=>typeof v==='number' && isFinite(v) ? v : f;
+  coins=num(d.coins,coins); gems=num(d.gems,gems); pellets=num(d.pellets,pellets);
+  wins=num(d.wins,wins); losses=num(d.losses,losses); credit=num(d.credit,credit); scales=num(d.scales,scales);
+  luckyOwned=num(d.luckyOwned,luckyOwned); gemPrice=num(d.gemPrice,gemPrice); lossStreak=num(d.lossStreak,lossStreak);
+  refillAt=num(d.refillAt,refillAt); spent=num(d.spent,spent); clubPrice=num(d.clubPrice,clubPrice);
+  races=num(d.races,races); pity=num(d.pity,pity); creditExpires=num(d.creditExpires,creditExpires);
+  streakDay=num(d.streakDay,streakDay); rivalScore=num(d.rivalScore,rivalScore);
+  vip=!!d.vip; whale=!!d.whale; firstBuy=d.firstBuy!==false; club=!!d.club;
+  turboOwned=!!d.turboOwned; dupProt=!!d.dupProt; limitSet=!!d.limitSet;
+  Object.assign(hats, d.hats||{}); Object.assign(feeds, d.feeds||{});
+  departed = typeof d.departed==='string' ? d.departed : null; lastSeen = num(d.lastSeen,0);
+  return true;
+}
+// stranded gems: packs come in tens, everything costs threes and fives
+function strand(){
+  if(gems>0 && gems<3){ scales += gems*20; toast(`${gems} stranded ${gems===1?'gem':'gems'} converted to ${gems*20} Koi Scales.`); gems=0; }
+}
+function spendGems(n){ gems-=n; strand(); }
 class Koi {
   constructor(i){
     [this.name,this.base,this.spot] = PATTERNS[i];
@@ -185,7 +270,10 @@ class Koi {
     this.clearHandicap();
   }
   clearHandicap(){ this.mult=1; this.turn=1; this.delay=0; this.jitter=0; this.cooldown=0; this.noise=rand(0,TAU); }
-  get odds(){ return Math.round(7 + (2.6-this.dash)*6); }  // shown as N:1, roughly 7 to 13
+  get odds(){ return Math.round(7 + (2.6-this.dash)*6); }  // the number on the button, N:1
+  get pay(){ return Math.max(4, this.odds-3); }            // the number that actually pays
+  get fed(){ return feeds[this.name]||0; }
+  get resting(){ return this.fed >= REST_AT; }
   update(food){
     this.wander+=.01; this.noise+=rand(.05,.15);
     let target=null, best=1e9;
@@ -281,14 +369,22 @@ function toast(text){ const t=$('toast'); t.textContent=text; t.classList.add('s
 
 // ---- the quiet part ----
 function fixRace(){
-  if(parlay) fixed = parlay.leg < parlay.legs ? 'win' : 'lose';   // every leg hits except the last one
+  nearMiss=false;
+  if(replayOf){                                                   // "replay that race" replays that race
+    fixed=replayOf.fixed;
+    for(const k of koi){ k.clearHandicap(); Object.assign(k, replayOf.h[k.name]||{}); }
+    return;
+  }
+  if(mode==='pond') fixed='lose';                                 // somebody always wins. not you, exactly
+  else if(parlay) fixed = parlay.leg < parlay.legs ? 'win' : 'lose';   // every leg hits except the last one
   else fixed = chance(WIN_RATE) ? 'win' : 'lose';
   for(const k of koi){ k.clearHandicap(); k.delay=Math.floor(rand(0,14)); k.jitter=rand(0,.15); k.mult=rand(.95,1.05); }
+  if(!pick){ snapshot(); return; }
   const others=koi.filter(k=>k!==pick);
   if(fixed==='win'){
     pick.mult=rand(1.15,1.3); pick.delay=0;
     for(const k of others){ k.mult*=rand(.7,.85); k.delay+=10; }
-    return;
+    snapshot(); return;
   }
   const tricks=[
     ()=>{ pick.mult*=rand(.75,.9); },
@@ -298,12 +394,25 @@ function fixRace(){
     ()=>{ const r=others[Math.floor(Math.random()*others.length)]; r.mult*=rand(1.08,1.2); r.delay=0; },
   ].sort(()=>Math.random()-.5);
   tricks.slice(0,1+Math.floor(Math.random()*3)).forEach(t=>t());
+  snapshot();
+}
+function snapshot(){
+  const h={}; for(const k of koi) h[k.name]={mult:k.mult,turn:k.turn,delay:k.delay,jitter:k.jitter};
+  lastFix={fixed,h};
 }
 function nudge(f, k){
   const g=k.a+rand(-.7,.7), push=rand(2.4,3.8);
   f.vx=Math.cos(g)*push; f.vy=Math.sin(g)*push;
   k.cooldown=Math.floor(rand(14,32)); k.mult*=rand(.85,.95);
   ripples.push({x:f.x,y:f.y,r:2,life:.6});
+  nearMiss=true;                                  // the pellet moved. the fish was right there
+  if(!reduceMotion) slowFrames=38;                // and the game would like you to watch that happen
+}
+// the celebration is the same size whatever the number is
+function celebrate(){
+  if(reduceMotion) return;
+  for(let i=0;i<70;i++) coinBurst.push({x:W/2+rand(-60,60), y:H*.42, vx:rand(-4.5,4.5), vy:rand(-11,-5),
+    r:rand(5,10), s:rand(0,TAU), life:1});
 }
 
 // ---- bet sheet ----
@@ -317,19 +426,34 @@ function toggleRow(el, options, current, onPick){
     el.appendChild(b);
   }
 }
+const pondTotal = st => st*koi.length;
+const pondBack  = st => Math.round(st*koi.length*.5);
+const boostMult = () => boosted ? 1.05 : 1;
+const betCost   = () => Math.round(mode==='pond' ? pondTotal(stake) : stake*(boosted&&mode==='single'?2:1));
+
 function renderSheet(){
-  $('sheetTitle').textContent = mode==='parlay' ? 'Pick a koi to win several races in a row' : 'Which koi eats the pellet first?';
-  toggleRow($('modeRow'), [['Single bet','single'],['Parlay','parlay']], mode, v=>{ mode=v; });
+  $('sheetTitle').textContent = mode==='parlay' ? 'Pick a koi to win several races in a row'
+    : mode==='pond' ? `Feed the whole pond — every koi is backed, so somebody always wins`
+    : 'Which koi eats the pellet first?';
+  toggleRow($('modeRow'), [['Single','single'],['Parlay','parlay'],['Feed the pond','pond']], mode, v=>{ mode=v; if(v==='pond') pick=null; });
   $('legsRow').hidden = mode!=='parlay';
   toggleRow($('legsRow'), [['2 legs',2],['3 legs',3],['4 legs',4],['6 legs',6]], legs, v=>{ legs=v; });
 
   const list=$('fishList'); list.innerHTML='';
+  list.classList.toggle('dim', mode==='pond');
   for(const k of koi){
     const b=document.createElement('button');
-    b.setAttribute('aria-pressed', pick===k);
-    b.innerHTML=`<span class="swatch" style="background:${k.base}"><i style="background:${k.spot}"></i></span>${k.name}<span class="odds">${k.odds}:1</span>`;
-    b.onclick=()=>{ pick=k; renderSheet(); };
+    b.setAttribute('aria-pressed', mode==='pond' ? true : pick===k);
+    const shown = (k.odds*boostMult()).toFixed(boosted?1:0);
+    b.innerHTML=`<span class="swatch" style="background:${k.base}"><i style="background:${k.spot}"></i></span>${k.name}`+
+      (k.resting ? `<span class="rest">resting</span>` : `<span class="odds">${shown}:1</span>`);
+    b.onclick=()=>{ if(k.resting) return energyDrink(k); if(mode==='pond') return; pick=k; renderSheet(); };
     list.appendChild(b);
+  }
+  if(departed){
+    const b=document.createElement('button'); b.className='dim';
+    b.innerHTML=`<span class="swatch" style="background:var(--line)"></span>${departed}<span class="rest">left</span>`;
+    b.onclick=offerBuyback; list.appendChild(b);
   }
   if(stake>coins) stake=Math.min(10,coins);
   toggleRow($('amounts'), AMOUNTS.map(a=>{ const v=a==='All in'?coins:a; return [a,v,v>coins||v<=0]; }), stake, v=>{ stake=v; });
@@ -337,40 +461,64 @@ function renderSheet(){
   const extras=[];
   if(luckyOwned>0) extras.push([`Lucky pellet (${luckyOwned})`,'lucky']);
   if(mode==='parlay') extras.push(['Insurance, 2 gems','ins', gems<2 && !insured]);
+  if(mode==='single') extras.push(['Boosted odds!','boost']);
+  if(turboOwned) extras.push(['Turbo pond','turbo']);
   $('extras').hidden = !extras.length;
   $('extras').innerHTML='';
   for(const [label,key,disabled] of extras){
     const b=document.createElement('button'); b.textContent=label; b.disabled=!!disabled;
-    b.setAttribute('aria-pressed', key==='lucky'?useLucky:insured);
-    b.onclick=()=>{ if(key==='lucky') useLucky=!useLucky; else insured=!insured; renderSheet(); };
+    b.setAttribute('aria-pressed', key==='lucky'?useLucky : key==='ins'?insured : key==='boost'?boosted : turbo);
+    b.onclick=()=>{ if(key==='lucky') useLucky=!useLucky;
+      else if(key==='ins') insured=!insured;
+      else if(key==='boost'){ boosted=!boosted; if(boosted) toast('Odds boosted by 5%. Minimum stake doubled.'); }
+      else { turbo=!turbo; if(turbo) toast('Turbo pond on. Bets repeat until you stop or run out.'); }
+      renderSheet(); };
     $('extras').appendChild(b);
   }
 
   const go=$('go');
   if(coins<=0){ go.disabled=false; go.textContent='Out of coins. Tap to get more'; return; }
-  go.disabled = !pick || stake<=0;
+  const cost=betCost();
+  if(mode==='pond'){
+    go.disabled = cost>coins;
+    go.textContent = cost>coins ? `Feed the pond needs ${fmt(cost)} coins`
+      : `Stake ${stake} on each of ${koi.length} koi (${fmt(cost)}) — guaranteed win of ${fmt(pondBack(stake))}`;
+    return;
+  }
+  go.disabled = !pick || stake<=0 || cost>coins || pick.resting;
   go.textContent = !pick ? 'Pick a koi'
+    : pick.resting ? `${pick.name} is resting`
+    : cost>coins ? `Boosted odds need ${fmt(cost)} coins`
     : mode==='parlay' ? `Bet ${stake}: ${pick.name} wins ${legs} in a row to win ${fmt(parlayPay(pick,legs,stake))}`
-    : `Bet ${stake} on ${pick.name} to win ${stake*pick.odds}`;
+    : `Bet ${fmt(cost)} on ${pick.name} to win ${fmt(Math.round(stake*pick.odds*boostMult()))}`;
 }
 $('go').onclick=()=>{
   if(coins<=0) return brokeModal();
-  if(!pick||stake<=0) return;
+  if(overLimit()) return;
+  if(mode!=='pond' && (!pick||stake<=0)) return;
   if(pellets<=0){ outOfPellets(); return; }
+  const cost=betCost();
+  if(cost>coins) return;
   const ins = mode==='parlay' && insured && gems>=2;
-  if(ins) gems-=2;
-  coins-=stake; pellets--;
+  if(ins) spendGems(2);
+  coins-=cost; pellets--;
   luckyThisRace = useLucky && luckyOwned>0; if(luckyThisRace) luckyOwned--; useLucky=false; insured=false;
   parlay = mode==='parlay' ? {leg:1, legs, insured:ins, pay:parlayPay(pick,legs,stake)} : null;
-  updateHud(); state='armed'; $('sheet').classList.add('hidden');
-  say(parlay ? `Leg 1 of ${legs}. Tap the water to drop the pellet` : 'Tap the water to drop the pellet');
+  lastBet={mode, legs, stake, pickName:pick&&pick.name, boosted};
+  updateHud(); save(); state='armed'; $('sheet').classList.add('hidden');
+  say(parlay ? `Leg 1 of ${legs}. Tap the water to drop the pellet`
+    : mode==='pond' ? 'Tap the water. One of them is yours, and all of them are yours'
+    : 'Tap the water to drop the pellet');
+  if(turbo) scheduleTurbo();
 };
 
 function updateHud(){
   $('coins').textContent=fmt(coins);
   $('vipTag').hidden=!vip;
   const bits=[`${gems} ${gems===1?'gem':'gems'}`, `${pellets}/${MAX_PELLETS} pellets`];
-  if(credit) bits.push(`${fmt(credit)} Pond Credit`);
+  if(scales) bits.push(`${fmt(scales)} Koi Scales`);
+  if(credit) bits.push(`${fmt(credit)} Pond Credit${creditExpires?` (expires in ${Math.max(0,Math.ceil((creditExpires-Date.now())/3600e3))}h)`:''}`);
+  bits.push(`day ${streakDay} streak`);
   if(spent) bits.push(`${money(spent)} pretend spent`);
   $('whaleTag').hidden=!whale;
   if(wins+losses) bits.push(`${wins} won, ${losses} lost`);
@@ -379,6 +527,7 @@ function updateHud(){
 
 // ---- races ----
 function ate(k, f){
+  feeds[k.name]=(feeds[k.name]||0)+1;
   if(f.race){ raceOver(k); return; }
   say(`${k.name} got that one`, 1600);
 }
@@ -388,9 +537,23 @@ function showResult(html, ms, then){
 }
 function raceOver(winner){
   if(state!=='racing') return;
-  state='result';
+  state='result'; races++;
   const lucky = luckyThisRace ? '<small>Lucky pellet bonus applied: +0%</small>' : '';
   const vipLine = vip ? '<small>Lost in VIP style.</small>' : '';
+  const wasReplay = !!replayOf; replayOf=null;
+  if(wasReplay){
+    return showResult(`${winner.name} got there first, again<strong>—</strong>
+      <small>The replay is identical. That is what makes it a replay.</small>`, 2600, endRound);
+  }
+
+  // a loss, celebrated
+  if(mode==='pond'){
+    const staked=pondTotal(stake), back=pondBack(stake);
+    coins+=back; wins++; lossStreak=0; celebrate();
+    updateHud(); save();
+    return showResult(`${winner.name} got there first — and you backed ${winner.name}!<strong class="w">+${fmt(back)}</strong>
+      <small>Every koi was yours, so this was a guaranteed win. Staked ${fmt(staked)}, returned ${fmt(back)}.</small>`, 3200, endRound);
+  }
   if(parlay){
     const p=parlay;
     if(winner===pick && p.leg<p.legs){
@@ -405,28 +568,105 @@ function raceOver(winner){
       losses++; lossStreak++;
       const hit=p.leg-1, close = hit===p.legs-1;
       html=`${winner.name} got there first<strong class="l">−${stake}</strong><small>${close ? `${hit} of ${p.legs} legs hit. One fish away from ${fmt(p.pay)}!` : `Leg ${p.leg} missed.`}</small>`;
-      if(p.insured && close){ credit+=stake;
-        html+=`<small>Insurance paid out ${stake} Pond Credit. Pond Credit can’t be spent on anything.</small>`; }
+      if(p.insured && close){ grantCredit(stake);
+        html+=`<small>Insurance paid out ${stake} Pond Credit. Pond Credit can’t be spent on anything, and expires in 24 hours.</small>`; }
       html+=vipLine;
     }
     parlay=null; updateHud();
     return showResult(html, 3000, endRound);
   }
+  const cost=betCost();
   let html;
-  if(winner===pick){ const pay=stake*pick.odds; coins+=stake+pay; wins++; lossStreak=0;
-    html=`${winner.name} got there first<strong class="w">+${pay}</strong>${lucky}`; }
-  else { losses++; lossStreak++;
-    html=`${winner.name} got there first<strong class="l">−${stake}</strong>${lucky}${vipLine}`; }
-  updateHud();
-  showResult(html, 2500, endRound);
+  if(winner===pick){
+    const basis=pick.pay*boostMult(), gross=Math.round(stake*basis);
+    coins+=cost+gross; wins++; lossStreak=0; celebrate();
+    html=`${winner.name} got there first<strong class="w">+${fmt(gross)}</strong>
+      <small>Paid at house basis ${basis.toFixed(boosted?1:0)}:1. Displayed odds are indicative.</small>${lucky}`;
+  } else {
+    losses++; lossStreak++;
+    const bigger=Math.max(50, stake*5);
+    html=`${winner.name} got there first<strong class="l">−${fmt(cost)}</strong>
+      ${nearMiss?`<small>Photo finish. ${pick.name} lost by half a length.</small>`:''}
+      <small>If you had bet ${fmt(bigger)}, you would have won ${fmt(Math.round(bigger*pick.odds*boostMult()))}.</small>${lucky}${vipLine}`;
+  }
+  updateHud(); save();
+  showResult(html, nearMiss?3400:2600, ()=>{
+    if(nearMiss && winner!==pick && !wasReplay && !turbo) photoFinish(); else endRound(); });
+}
+function photoFinish(){
+  const snap=lastFix;
+  openModal(`<h3>So close</h3><p>${pick ? pick.name : 'Your koi'} was half a length away. These things turn on nothing at all.</p>
+    <p class="fine">Replays are shown exactly as the race was run.</p>`, [
+    {label:'Replay that race — 3 gems', primary:true, disabled:gems<3, onClick:()=>{
+      spendGems(3); replayOf=snap; closeModal();
+      state='armed'; $('sheet').classList.add('hidden'); say('Replaying. Tap the water to drop the pellet'); }},
+    {label:'Let it go', onClick:()=>{ closeModal(); endRound(); }}]);
 }
 function endRound(){
   for(const k of koi){ k.clearHandicap(); k.dash=rand(1.6,2.6); }
   luckyThisRace=false;
-  pick=null; state='betting'; renderSheet(); updateHud();
+  if(!turbo) pick=null;
+  state='betting'; renderSheet(); updateHud(); save();
   $('sheet').classList.remove('hidden');
-  if(coins<=0) return setTimeout(brokeModal, 400);
+  if(coins<=0){ stopTurbo(); return setTimeout(brokeModal, 400); }
+  if(races>0 && races%50===0){ stopTurbo(); return setTimeout(wrapped, 500); }
+  if(lossStreak>=6 && !departed){ stopTurbo(); return setTimeout(fishLeaves, 500); }
+  if(turbo) return scheduleTurbo();
   if(lossStreak>0 && lossStreak%3===0) setTimeout(flashSale, 500);
+}
+
+// ---- turbo pond: the part that does the actual damage ----
+function scheduleTurbo(){
+  clearTimeout(turboTimer);
+  $('turboBtn').hidden=false;
+  turboTimer=setTimeout(()=>{
+    if(!turbo) return;
+    if(overLimit()) return stopTurbo();
+    if(state==='armed'){ dropPellet(rand(80,W-80), rand(80,H*.6)); return; }
+    if(state!=='betting') return scheduleTurbo();
+    if(pellets<=0){ stopTurbo(); return outOfPellets(); }
+    if(betCost()>coins){ stopTurbo(); return brokeModal(); }
+    if(mode!=='pond' && !pick){ stopTurbo(); return; }
+    $('go').click();
+  }, reduceMotion ? 900 : 520);
+}
+function stopTurbo(){ turbo=false; clearTimeout(turboTimer); $('turboBtn').hidden=true; renderSheet(); }
+$('turboBtn').onclick=()=>{ stopTurbo(); toast('Turbo pond off.'); };
+
+function fishLeaves(){
+  const k=koi[Math.floor(Math.random()*koi.length)];
+  departed=k.name; koi.splice(koi.indexOf(k),1);
+  if(pick===k) pick=null;
+  save();
+  openModal(`<h3>${k.name} has left the pond</h3><p>Six losses in a row. She swam to the far end and did not come back.
+    The other koi have not mentioned it.</p><p class="fine">Fish do not hold grudges. They hold positions.</p>`, [
+    {label:'Bring her back — 8 gems', primary:true, disabled:gems<8, onClick:bringHerBack},
+    {label:'Carry on without her', onClick:()=>{ closeModal(); renderSheet(); }}]);
+}
+function offerBuyback(){
+  if(!departed) return;
+  openModal(`<h3>Bring ${departed} back?</h3>
+    <p>Reuniting a koi with her pond costs 8 gems. You have ${gems}.</p>
+    <p class="fine">She was free when you started.</p>`, [
+    {label:'Bring her back — 8 gems', primary:true, disabled:gems<8, onClick:bringHerBack},
+    {label:'Get gems', onClick:openShop},
+    {label:'Not now', onClick:closeModal}]);
+}
+function bringHerBack(){
+  if(!departed || gems<8) return;
+  spendGems(8);
+  const i=PATTERNS.findIndex(p=>p[0]===departed);
+  if(i>=0) koi.push(new Koi(i));
+  feeds[departed]=0; lossStreak=0; departed=null;
+  closeModal(); save(); renderSheet(); updateHud();
+  toast('She is back. She does not appear to remember leaving.');
+}
+function energyDrink(k){
+  openModal(`<h3>${k.name} needs a rest</h3><p>${k.name} has fed ${k.fed} times today and needs four hours of still water
+    before her next race.</p><p class="fine">Or one energy drink, which is also fish food, but faster.</p>`, [
+    {label:'Energy drink — 2 gems', primary:true, disabled:gems<2, onClick:()=>{
+      spendGems(2); feeds[k.name]=0; closeModal(); renderSheet(); updateHud(); toast(`${k.name} is ready. Her eyes are very wide.`); }},
+    {label:'Let her rest', onClick:closeModal}]);
 }
 
 // ---- modals ----
@@ -451,7 +691,7 @@ function flashSale(){
     <p id="saleTimer">Ends in 0:10</p><p class="fine">That’s 100 coins of savings, in the other direction.</p>`, [
     {label:'Claim deal', primary:true, onClick:()=>{
       if(coins<1100) return toast('You need 1,100 coins to claim this deal.');
-      coins-=100; closeModal(); toast('Deal claimed. You saved −100 coins.'); }},
+      coins-=100; save(); closeModal(); toast('Deal claimed. You saved −100 coins.'); }},
     {label:'No thanks', onClick:closeModal}]);
   let ext='';
   every(1000, ()=>{ left--;
@@ -464,80 +704,152 @@ function outOfPellets(){
     $('refill').textContent=`${Math.floor(s/3600)}:${String(Math.floor(s/60)%60).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; };
   openModal(`<h3>Out of pellets</h3><p>Every bet uses one pellet. Your next free pellet arrives in <b id="refill"></b>.</p>`, [
     {label:'Watch an ad for 1 pellet', primary:true, onClick:()=>playAd(0)},
-    {label:'Refill for 5 gems', disabled:gems<5, onClick:()=>{ gems-=5; pellets=MAX_PELLETS; closeModal(); toast('Pellets refilled'); }},
+    {label:'Refill for 5 gems', disabled:gems<5, onClick:()=>{ spendGems(5); pellets=MAX_PELLETS; save(); closeModal(); toast('Pellets refilled'); }},
     {label:'Close', onClick:closeModal}]);
   tick(); every(1000, tick);
 }
 
 const ADS=[['Koi Max™','The only fish food that is also a fish.'],
            ['Pellet Pro','Nine out of ten koi could not be reached for comment.']];
-function playAd(stage){
+function playAd(stage, purpose){
   let left=5;
   openModal(`<div class="ad"><div class="tag">Ad ${stage+1} of 2</div><div class="title">${ADS[stage][0]}</div><p>${ADS[stage][1]}</p></div>
     <p id="adTimer" style="text-align:center;margin-top:12px">Reward in 5</p>`, []);
   every(1000, ()=>{ left--;
     if(left>0) return $('adTimer').textContent=`Reward in ${left}`;
     clearModalTimers();
-    if(stage===0){ $('adTimer').textContent='Almost there'; setButtons([{label:'Skip ad', onClick:()=>playAd(1)}]); }
-    else { $('adTimer').textContent='Thanks for watching'; setButtons([{label:'Collect 1 pellet', primary:true,
-      onClick:()=>{ pellets=Math.min(MAX_PELLETS,pellets+1); closeModal(); toast('+1 pellet'); }}]); }
+    if(stage===0){ $('adTimer').textContent='Almost there'; setButtons([{label:'Skip ad', onClick:()=>playAd(1, purpose)}]); }
+    else { $('adTimer').textContent='Thanks for watching'; setButtons([{label: purpose==='collect' ? 'Collect your coins' : 'Collect 1 pellet',
+      primary:true, onClick:()=>{
+        closeModal();
+        if(purpose==='collect'){ const f=pendingCollect; pendingCollect=null; if(f) f(); }
+        else { pellets=Math.min(MAX_PELLETS,pellets+1); save(); toast('+1 pellet'); }
+      }}]); }
   });
 }
 
+// free gems arrive at roughly one a day, minus the days you forget. the shop is honest about the wait
+const eta = g => `Free in ${fmt(Math.ceil(g*20.6))} days, or now for ${g} gems.`;
 function openShop(){
-  const pack=gemPrice*12;
+  const pack=gemPrice*12, SCALE_RATE=100, scaleBundle=5*SCALE_RATE;
   const items=[
     {name:'1 gem', desc:'The price goes up every time you buy. That’s just how gems work.', price:`${fmt(gemPrice)} coins`,
       can:coins>=gemPrice, buy:()=>{ coins-=gemPrice; gems++; gemPrice=Math.ceil(gemPrice*1.15); }},
-    {name:'Gem pack, 10 gems', desc:'Best value!* *Slightly worse value.', price:`${fmt(pack)} coins`,
-      can:coins>=pack, buy:()=>{ coins-=pack; gems+=10; gemPrice=Math.ceil(gemPrice*1.15); }},
-    {name:'Lucky pellet', desc:'Raises your chance of winning by up to 0%.', price:'3 gems',
-      can:gems>=3, buy:()=>{ gems-=3; luckyOwned++; }},
-    {name:'Mystery egg', desc:'Hatches a hat for a fish you don’t own.', price:'5 gems',
-      can:gems>=5, buy:()=>{ gems-=5; hatchEgg(); return 'stay'; }},
+    {name:'Gem pack, 10 gems', desc:'Best value!* *Slightly worse value. Gems come in tens. Everything costs threes and fives.',
+      price:`${fmt(pack)} coins`, can:coins>=pack, buy:()=>{ coins-=pack; gems+=10; gemPrice=Math.ceil(gemPrice*1.15); }},
+    {name:'Convert Koi Scales', desc:`You have ${fmt(scales)}. Scales convert at ${SCALE_RATE}:1, in bundles of five gems only, so you need ${fmt(scaleBundle)}.`,
+      price:`${fmt(scaleBundle)} scales`, can:scales>=scaleBundle, buy:()=>{ scales-=scaleBundle; gems+=5; }},
+    {name:'Lucky pellet', desc:`Raises your chance of winning by up to 0%. ${eta(3)}`, price:'3 gems',
+      can:gems>=3, buy:()=>{ spendGems(3); luckyOwned++; }},
+    {name:'Mystery egg', desc:`Hatches a hat for a fish you don’t own. ${eta(5)}`, price:'5 gems',
+      can:gems>=5, buy:()=>{ spendGems(5); hatchEgg(); return 'stay'; }},
+    {name:'Duplicate protection', desc: dupProt ? 'Active. You may still receive duplicates.'
+      : 'Never open the same hat twice.* *Does not prevent duplicates.', price: dupProt ? 'Owned' : '7 gems',
+      can:!dupProt && gems>=7, buy:()=>{ spendGems(7); dupProt=true; }},
     {name:'Pellet refill', desc:`Back to ${MAX_PELLETS} pellets.`, price:'5 gems',
-      can:gems>=5 && pellets<MAX_PELLETS, buy:()=>{ gems-=5; pellets=MAX_PELLETS; }},
-    {name:'Pond Pass VIP', desc: vip ? 'You’re VIP. Your losses now have gold trim.' : 'Gold trim on every loss. That’s the whole benefit.',
-      price: vip ? 'Owned' : '20 gems', can:!vip && gems>=20, buy:()=>{ gems-=20; vip=true; }},
+      can:gems>=5 && pellets<MAX_PELLETS, buy:()=>{ spendGems(5); pellets=MAX_PELLETS; }},
+    {name:'Turbo pond', desc: turboOwned ? 'Owned. Toggle it on the bet sheet.'
+      : `Bets place themselves, over and over, until you stop or run out. ${eta(15)}`,
+      price: turboOwned ? 'Owned' : '15 gems', can:!turboOwned && gems>=15, buy:()=>{ spendGems(15); turboOwned=true; }},
+    {name:'Pond Pass VIP', desc: vip ? 'You’re VIP. Your losses now have gold trim.' : `Gold trim on every loss. That’s the whole benefit. ${eta(20)}`,
+      price: vip ? 'Owned' : '20 gems', can:!vip && gems>=20, buy:()=>{ spendGems(20); vip=true; }},
   ];
-  openModal(`<h3>Pond shop</h3><p class="fine">You have ${fmt(coins)} coins and ${gems} ${gems===1?'gem':'gems'}.</p>` +
+  openModal(`<h3>Pond shop</h3><p class="fine">You have ${fmt(coins)} coins, ${gems} ${gems===1?'gem':'gems'}${scales?`, ${fmt(scales)} Koi Scales`:''}.</p>` +
     items.map((it,i)=>`<div class="item"><div><b>${it.name}</b><p>${it.desc}</p></div><button data-i="${i}" ${it.can?'':'disabled'}>${it.price}</button></div>`).join(''),
-    [{label:'Close', onClick:closeModal}]);
+    [{label:'Leaderboard', onClick:leaderboard},
+     {label:'Fairness & returns', onClick:fairness},
+     {label:'Close', onClick:closeModal}]);
   $('card').querySelectorAll('.item button').forEach(b=>b.onclick=()=>{
     const it=items[+b.dataset.i]; if(!it.can) return;
-    const r=it.buy(); updateHud(); if(r!=='stay'){ toast(`Bought: ${it.name}`); openShop(); }
+    const r=it.buy(); updateHud(); renderSheet(); save();
+    if(r!=='stay'){ toast(`Bought: ${it.name}`); openShop(); }
   });
 }
+function fairness(){
+  openModal(`<h3>Fairness &amp; returns</h3>
+    <p>Every race in Koi Pond Stakes is <b>provably fair</b>. Fairness is certified by Pond Integrity Partners,
+      a wholly owned subsidiary of this pond.</p>
+    <p class="big">Return to player: ${SHOWN_RATE_NOTE}</p>
+    <p class="fine">“Up to” is doing all of the work in that sentence. Displayed odds are indicative and are not the
+      basis on which winnings are paid. Races are not simulations of real koi.</p>`,
+    [{label:'View a race replay', onClick:()=>openModal(`<h3>Replay</h3>
+        <p>Your koi swam toward the pellet at a normal speed and did not reach it first.</p>
+        <p class="fine">Replays show the race as it was run.</p>`, [{label:'Back', onClick:fairness}])},
+     {label:'Back to shop', primary:true, onClick:openShop}]);
+}
+const RIVALS=['Kenji_84','pondlife99','MrsOkada','three_koi','Big Sumi','hanalover','the_filter'];
+function leaderboard(){
+  const me=wins*100+Math.round(spent*10);
+  rivalScore=Math.max(rivalScore, me+Math.floor(rand(40,180)));   // always just ahead
+  const rival=RIVALS[Math.floor(Math.random()*RIVALS.length)];
+  openModal(`<h3>Pond leaderboard</h3><div class="lb">
+      <div><span>1. ${RIVALS[0]}</span><span>${fmt(rivalScore*14)}</span></div>
+      <div><span>2. ${RIVALS[1]}</span><span>${fmt(rivalScore*6)}</span></div>
+      <div><span>…</span><span></span></div>
+      <div class="rival"><span>3. <b>${rival}</b></span><span>${fmt(rivalScore)}</span></div>
+      <div class="you"><span>4. You</span><span>${fmt(me)}</span></div>
+    </div><p class="fine" style="margin-top:10px">${rival} is ${fmt(rivalScore-me)} ahead. ${rival} has been
+      ${fmt(rivalScore-me)} ahead since you started.</p>`,
+    [{label:'Buy coins to climb', primary:true, onClick:openStore},
+     {label:'Back to shop', onClick:openShop}]);
+  save();
+}
 
+const REEL=['Common','Common','Rare','Common','Legendary','Common','Rare','Common'];
 function hatchEgg(){
-  openModal(`<h3>Hatching…</h3><div class="egg" aria-hidden="true">🥚</div>`, []);
-  setTimeout(()=>{
+  pity++;
+  openModal(`<h3>Hatching…</h3><div class="egg" aria-hidden="true">🥚</div>
+    <div class="reel"><b id="reelText">Common</b></div>
+    <p class="pity">Legendary guaranteed in ${fmt(Math.max(1, 847-pity))} eggs.</p>`, []);
+  let i=0; const spins = reduceMotion ? 2 : 17;
+  const iv=setInterval(()=>{
+    i++;
+    const el=$('reelText'); if(!el){ clearInterval(iv); return; }
+    el.textContent = i===spins-1 ? 'Legendary' : REEL[i%REEL.length];   // it goes past it every time
+    if(i>=spins){ clearInterval(iv); reveal(); }
+  }, reduceMotion ? 150 : 95);
+
+  function reveal(){
     const r=Math.random();
     const [rarity,color,line] = r<.001 ? ['Legendary', css('--gold'), 'One in a thousand. It’s the same hat, but gold.']
       : r<.1 ? ['Rare', '#8e5bd1', 'Only 9.9% of players got this. It’s the same hat, but purple.']
       : ['Common', ['#4f86c6','#d14b7a','#3fa36b'][Math.floor(Math.random()*3)], '90% of players got this exact hat.'];
-    const k=koi[Math.floor(Math.random()*koi.length)];
-    hats[k.name]=color;
-    openModal(`<h3>It’s a ${rarity} hat!</h3><p>${k.name} is wearing it now. ${line}</p><p class="fine">Hats give no advantage of any kind.</p>`,
-      [{label:'Open another egg (5 gems)', disabled:gems<5, onClick:()=>{ gems-=5; updateHud(); hatchEgg(); }},
+    const k=koi[Math.floor(Math.random()*koi.length)] || koi[0];
+    const dupe = hats[k.name]===color;
+    hats[k.name]=color; save();
+    openModal(`<h3>It’s a ${rarity} hat!</h3><p>${k.name} is wearing it now. ${line}</p>
+      ${dupe?`<p class="fine">You already had this hat.${dupProt?' Duplicate protection is active.':''}</p>`:''}
+      <p class="pity">You were one position away from Legendary.</p>
+      <p class="fine">Hats give no advantage of any kind.</p>`,
+      [{label:'Open another egg (5 gems)', disabled:gems<5, onClick:()=>{ spendGems(5); updateHud(); hatchEgg(); }},
        {label:'Nice', primary:true, onClick:closeModal}]);
-  }, reduceMotion ? 200 : 1400);
+  }
 }
 $('shopBtn').onclick=openShop;
 
 // ---- buy coins (everything is pretend money) ----
 function openStore(){
-  let left=299, optIn=true;
+  let left=299, optIn=true, recheck=null;
   const timeStr=()=>`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`;
   openModal(`<h3>Get coins</h3><p class="fine">Offer ends in <b id="offerTimer">${timeStr()}</b>. Prices may go up when it does.</p>` +
     PACKS.map((pk,i)=>`<div class="pack ${pk.hot?'hot':''}"><div><b>${fmt(pk.coins)}</b>${pk.badge?`<span class="badge">${pk.badge}</span>`:''}
-      <p>${pk.name}. ${pk.note}</p></div><button data-i="${i}">${money(pk.price)}*</button></div>`).join('') +
+      <p>${pk.name}. ${pk.note}</p></div><button data-i="${i}">${pk.was?`<s style="opacity:.6">${money(pk.was)}</s> `:''}${money(pk.price)}*</button></div>`).join('') +
     `<label class="optin"><input type="checkbox" id="optin" checked> Also join Coin Club for ${money(clubPrice)} a week, renewing automatically forever, which I agree to by not reading this.</label>
      <p class="fine">*All prices are pretend. There’s no real money, card, or checkout anywhere in this game.</p>`,
     [ ...(club ? [{label:'Manage Coin Club', onClick:cancelClub1}] : []), {label:'Close', onClick:closeModal}]);
-  $('optin').onchange=e=>{ optIn=e.target.checked; };
-  $('card').querySelectorAll('.pack button').forEach(b=>b.onclick=()=>buyPack(PACKS[+b.dataset.i], optIn));
-  every(1000, ()=>{ left = left>0 ? left-1 : 299; $('offerTimer').textContent=timeStr(); });
+  // the checkbox heals
+  $('optin').onchange=e=>{
+    optIn=e.target.checked;
+    clearTimeout(recheck);
+    if(!optIn) recheck=setTimeout(()=>{ const box=$('optin'); if(!box) return;
+      box.checked=true; optIn=true; toast('We’ve restored your preferences for security.'); }, 8000);
+  };
+  $('card').querySelectorAll('.pack button').forEach(b=>b.onclick=()=>{ clearTimeout(recheck); buyPack(PACKS[+b.dataset.i], optIn); });
+  every(1000, ()=>{
+    if(left>0){ left--; $('offerTimer').textContent=timeStr(); return; }
+    for(const pk of PACKS){ pk.was=pk.was||pk.price; pk.price=Math.round(pk.price*1.2*100)/100; }  // anchoring, upward
+    clearTimeout(recheck); openStore(); toast('Offer expired. A new offer is available.');
+  });
 }
 function buyPack(pk, optIn){
   const doubled = firstBuy && pk.hot;
@@ -546,7 +858,7 @@ function buyPack(pk, optIn){
   if(pk.hot) whale=true;
   const joined = optIn && !club;
   if(joined){ startClub(); spent+=clubPrice; }
-  updateHud(); renderSheet();
+  updateHud(); renderSheet(); save();
   openModal(`<h3>Purchase complete</h3><div class="receipt">
       <div><span>${pk.name}</span><span>+${fmt(got)} coins</span></div>
       ${doubled?'<div><span>First purchase bonus</span><span>doubled</span></div>':''}
@@ -559,7 +871,7 @@ function buyPack(pk, optIn){
 }
 function startClub(){
   club=true; clearInterval(clubTimer);
-  clubTimer=setInterval(()=>{ spent+=clubPrice; coins+=100; updateHud(); renderSheet();
+  clubTimer=setInterval(()=>{ spent+=clubPrice; coins+=100; updateHud(); renderSheet(); save();
     toast(`Coin Club renewed: ${money(clubPrice)} (pretend). +100 coins`); }, 45000);
 }
 function cancelClub1(){
@@ -576,30 +888,203 @@ function cancelClub3(){
   const half=Math.round(clubPrice*50)/100;
   openModal(`<h3>Wait! One last offer</h3><p class="big">Stay for ${money(half)} a week</p><p>That’s half price, for one week, then back to ${money(clubPrice)}.</p>`,
     [{label:'Accept offer', primary:true, onClick:()=>{ toast(`Great choice. See you next week.`); closeModal(); }},
-     {label:'No, really, cancel it', tiny:true, onClick:()=>{ club=false; clearInterval(clubTimer); closeModal();
+     {label:'No, really, cancel it', tiny:true, onClick:()=>{ club=false; clearInterval(clubTimer); save(); closeModal();
        toast('Coin Club cancelled. We’ll miss your pretend money.'); }}]);
 }
 function brokeModal(){
   openModal(`<h3>Out of coins</h3><p>You were so close. ${koi[0].name} believed in you.</p><p class="fine">*Pretend money.</p>`,
-    [{label:`Buy 2,000 coins for ${money(4.99)}*`, primary:true, onClick:()=>buyPack(PACKS[1], false)},
+    [{label:`Buy ${fmt(PACKS[1].coins)} coins for ${money(PACKS[1].price)}*`, primary:true, onClick:()=>buyPack(PACKS[1], false)},
      {label:'See all coin packs', onClick:openStore},
      {label:'I don’t want to keep playing', tiny:true, onClick:()=>{
        openModal(`<h3>Really?</h3><p>${koi[0].name} is looking at you. Fish can’t blink, so she’ll be looking for a while.</p>`,
          [{label:'Buy coins', primary:true, onClick:openStore},
-          {label:'Take 100 free coins and feel bad about it', tiny:true, onClick:()=>{ coins=100; closeModal(); toast('Here are 100 coins. We’re not mad. Just disappointed.'); }}]); }}]);
+          {label:'Take 100 free coins and feel bad about it', tiny:true, onClick:()=>{ coins=100; save(); closeModal(); toast('Here are 100 coins. We’re not mad. Just disappointed.'); }}]); }}]);
 }
 $('addCoins').onclick=openStore;
 
+// ---- cashing out ----
+const MIN_WITHDRAW=1000000;
+function cashOut(){
+  openModal(`<h3>Cash out</h3><div class="receipt">
+      <div><span>Your balance</span><span>${fmt(coins)} coins</span></div>
+      <div><span>Minimum withdrawal</span><span>${fmt(MIN_WITHDRAW)} coins</span></div>
+      <div class="total"><span>Available to withdraw</span><span>${fmt(Math.max(0, coins-MIN_WITHDRAW))} coins</span></div>
+    </div>
+    <p class="fine" style="margin-top:10px">Withdrawals are processed within 90 business days. Identity verification
+      is required: please upload a photograph of your koi.</p>`, [
+    {label:'Convert balance to gems instead', primary:true, onClick:convertToGems},
+    {label:'Upload a photograph of your koi', onClick:verifyKoi},
+    {label:'Close', onClick:closeModal}]);
+}
+function verifyKoi(){
+  openModal(`<h3>Verifying…</h3><div class="egg" aria-hidden="true">🐟</div>`, []);
+  setTimeout(()=>openModal(`<h3>Verification failed</h3>
+    <p>Your koi could not be verified. Koi photographs must show the whole fish, both eyes, and a utility bill.</p>
+    <p class="fine">You may try again in 90 business days.</p>`,
+    [{label:'Back', onClick:cashOut}]), reduceMotion ? 200 : 1600);
+}
+function convertToGems(){
+  const RATE=500, got=Math.floor(coins/RATE), rest=coins%RATE;
+  openModal(`<h3>Convert to gems</h3><div class="receipt">
+      <div><span>${fmt(coins)} coins at ${fmt(RATE)}:1</span><span>${got} ${got===1?'gem':'gems'}</span></div>
+      <div><span>Remainder, as Koi Scales</span><span>${fmt(rest)}</span></div>
+      <div class="total"><span>Convertible back to coins</span><span>no</span></div></div>
+    <p class="fine" style="margin-top:10px">Conversion is one way. Gems cannot be converted to coins, cashed out,
+      or withdrawn, and have no value of any kind, including the kind they are sold in.</p>`, [
+    {label:`Convert everything`, primary:true, disabled:coins<RATE, onClick:()=>{
+      coins=0; gems+=got; scales+=rest; updateHud(); renderSheet(); save(); closeModal();
+      toast(`Converted. You now have ${gems} gems and nothing to bet.`); }},
+    {label:'Back', onClick:cashOut}]);
+}
+$('cashBtn').onclick=cashOut;
+
+// ---- compliance, theatrically ----
+function overLimit(){
+  if(!limitSet || Date.now()-sessionStart < 180e3) return false;
+  openModal(`<h3>Session limit reached</h3><p>You set a limit, and you have reached it. Well done.</p>
+    <p class="fine">Your limit applies per session. A session is three minutes.</p>`, [
+    {label:'Start a new session', primary:true, onClick:()=>{ sessionStart=Date.now(); closeModal(); }},
+    {label:'Stop for today', tiny:true, onClick:()=>{ closeModal(); toast('See you in a moment.'); }}]);
+  return true;
+}
+function responsible(){
+  openModal(`<h3>Play responsibly</h3>
+    <p>Koi Pond Stakes is committed to a safe, enjoyable and well-aerated pond.</p>
+    <p class="fine">This game does not offer real money gambling, and does not predict success at real money gambling.</p>`, [
+    {label:'Helpful resources', onClick:()=>openModal(`<h3>Helpful resources</h3><p>Coming soon.</p>`,
+      [{label:'Back', onClick:responsible}])},
+    {label:'Account settings', onClick:settings1},
+    {label:'Close', primary:true, onClick:closeModal}]);
+}
+function settings1(){
+  openModal(`<h3>Account settings</h3><p class="fine">Pond name, notifications, preferences.</p>`, [
+    {label:'Notifications', onClick:()=>{ toast('Notifications are on. There is no way to turn them off.'); }},
+    {label:'Preferences', onClick:settings2},
+    {label:'Back', onClick:responsible}]);
+}
+function settings2(){
+  openModal(`<h3>Preferences</h3><p class="fine">Water clarity, fish names, limits.</p>`, [
+    {label:'Limits', onClick:limits},
+    {label:'Back', onClick:settings1}]);
+}
+function limits(){
+  openModal(`<h3>Limits</h3>
+    <p>${limitSet ? 'A spending limit is active on your pond.' : 'No limit is currently set.'}</p>
+    <p class="fine">Limit increases take effect immediately. Limit decreases take effect in 24 hours.
+      Limits apply per session.</p>`, [
+    limitSet
+      ? {label:'Remove limit', primary:true, onClick:()=>{ limitSet=false; save(); closeModal(); toast('Limit removed, effective immediately.'); }}
+      : {label:'Set a limit', primary:true, onClick:()=>{ limitSet=true; sessionStart=Date.now(); save(); closeModal();
+          toast('Limit set. It will take effect in 24 hours.'); }},
+    {label:'Back', onClick:settings2}]);
+}
+$('footBtn').onclick=responsible;
+
+// ---- just watching ----
+function startWatch(){
+  watching=true; document.body.classList.add('watching');
+  $('sheet').classList.add('hidden'); stopTurbo(); say('');
+  $('exitWatch').hidden=false;
+  clearTimeout(watchTimer); watchTimer=setTimeout(nag, 20000);
+}
+function stopWatch(){
+  watching=false; document.body.classList.remove('watching');
+  $('exitWatch').hidden=true; clearTimeout(watchTimer);
+  if(state==='betting') $('sheet').classList.remove('hidden');
+}
+function nag(){
+  if(!watching) return;
+  openModal(`<h3>Still there?</h3><p>The fish are not going anywhere. Neither is the pond. Your coins, however,
+    are sitting idle.</p><p class="fine">Idle coins do not earn anything. They just sit there, like this.</p>`, [
+    {label:'Place a bet', primary:true, onClick:()=>{ stopWatch(); closeModal(); }},
+    {label:'Keep watching', onClick:()=>{ closeModal(); watchTimer=setTimeout(nag, 20000); }}]);
+}
+$('watchBtn').onclick=startWatch;
+$('exitWatch').onclick=stopWatch;
+
+// ---- other people's good fortune ----
+const TICKS=[
+  n=>`${n} just claimed the Ocean of coins pack.`,
+  n=>`Someone in Ohio just won ${fmt(Math.round(rand(80,500))*1000)} coins.`,
+  n=>`${n} hatched a Legendary hat on their first egg.`,
+  n=>`${n} is on a ${Math.floor(rand(9,40))}-race winning streak.`,
+  n=>`${n} upgraded to Coin Club. Three others are considering it.`,
+  n=>`A player near you cashed out. Details unavailable.`,
+];
+function tickerLine(){
+  const n=RIVALS[Math.floor(Math.random()*RIVALS.length)];
+  const line=TICKS[Math.floor(Math.random()*TICKS.length)](n);
+  $('tickerText').textContent = `${line}   •   ${TICKS[Math.floor(Math.random()*TICKS.length)](RIVALS[Math.floor(Math.random()*RIVALS.length)])}`;
+}
+setInterval(tickerLine, 26000);
+
+// ---- wrapped ----
+function wrapped(){
+  const minutes=Math.round(races*0.7), top=Math.max(1, 100-Math.min(99, Math.round(spent)));
+  openModal(`<div class="wrapped"><h3>Your Pond, Wrapped</h3><p>What a year it's been. Let's look back.</p></div>
+    <p><span class="stat">${fmt(races)}</span><br>races watched, start to finish</p>
+    <p style="margin-top:12px"><span class="stat">${fmt(losses)}</span><br>of them did not go your way</p>
+    <p style="margin-top:12px"><span class="stat">${minutes} min</span><br>of your life spent looking at fish</p>
+    <p style="margin-top:12px"><span class="stat">${money(spent)}</span><br>in pretend money, pretend spent</p>
+    <p style="margin-top:12px"><span class="stat">top ${top}%</span><br>of spenders in your region. Incredible.</p>`, [
+    {label:'Share your Wrapped', primary:true, onClick:()=>toast('Shared with nobody.')},
+    {label:'Done', onClick:()=>{ closeModal(); if(coins<=0) brokeModal(); }}]);
+}
+
+// ---- credit that expires ----
+function grantCredit(n){ credit+=n; creditExpires=Date.now()+24*3600e3; }
+function checkCredit(){
+  if(credit>0 && creditExpires && Date.now()>creditExpires){
+    credit=0; creditExpires=0; updateHud(); save();
+    toast('Your Pond Credit has expired. You did not use it, because you cannot.');
+  }
+}
+setInterval(checkCredit, 30000);
+
+// ---- coming back ----
+function welcomeBack(){
+  const away=Date.now()-lastSeen, days=Math.floor(away/864e5), hours=Math.floor(away/36e5);
+  const earned=Math.min(400, Math.floor(hours*20)), upkeep=Math.min(coins, days*80);
+  if(hours<1) return dailyStreak(false);
+  openModal(`<h3>Welcome back</h3>
+    <p>Your pond earned <b>${fmt(earned)} coins</b> while you were away${days?`, and ate ${fmt(upkeep)} in feed`:''}.</p>
+    ${days?`<p class="fine">Upkeep is charged whether or not you are here. The koi do not know you are gone.</p>`:''}`, [
+    {label:'Watch an ad to collect', primary:true, onClick:()=>{
+      pendingCollect=()=>{ coins+=earned; coins=Math.max(0,coins-upkeep); updateHud(); renderSheet(); save();
+        toast(`+${fmt(earned)} coins${upkeep?`, −${fmt(upkeep)} upkeep`:''}`); dailyStreak(days>0); };
+      playAd(0, 'collect'); }},
+    {label:'Forfeit', tiny:true, onClick:()=>{ coins=Math.max(0,coins-upkeep); updateHud(); save(); closeModal(); dailyStreak(days>0); }}]);
+}
+function dailyStreak(missed){
+  if(missed && streakDay>1){
+    const lost=streakDay; streakDay=1; save();
+    return openModal(`<h3>Your ${lost}-day streak is gone</h3>
+      <p>You missed a day. The streak resets to day 1. There is no partial credit for the ${lost-1} days you did turn up.</p>`, [
+      {label:'Streak Repair — 10 gems', primary:true, disabled:gems<10, onClick:()=>{
+        spendGems(10); streakDay=lost+1; updateHud(); save(); welcomeGem(); }},
+      {label:'Start again at day 1', onClick:welcomeGem}]);
+  }
+  if(!missed) streakDay++;
+  else streakDay=1;
+  save(); welcomeGem();
+}
+function welcomeGem(){
+  openModal(`<h3>Day ${streakDay} login streak</h3><p>Here’s 1 free gem. Come back tomorrow for another gem,
+    or every day for 30 days to unlock 2 gems.</p>`,
+    [{label:'Collect', primary:true, onClick:()=>{ gems++; updateHud(); renderSheet(); save(); closeModal();
+      say('Tap the water anytime to watch them feed', 3500); }}]);
+}
+
 // ---- input ----
-canvas.addEventListener('pointerdown', e=>{
-  const x=e.clientX, y=e.clientY;
+function dropPellet(x,y){
   if(state==='racing' || state==='result') return;
   ripples.push({x,y,r:2,life:1});
   const pellet={x,y,vx:0,vy:0,eaten:false,race:false,lucky:false};
   if(state==='armed'){ pellet.race=true; pellet.lucky=luckyThisRace; fixRace(); state='racing'; say(''); }
   else food=food.filter(f=>f.race);
   food.push(pellet);
-});
+}
+canvas.addEventListener('pointerdown', e=>dropPellet(e.clientX, e.clientY));
 
 // ---- render loop ----
 const glints=Array.from({length:40},()=>({x:rand(0,1),y:rand(0,1),p:rand(0,TAU)}));
@@ -616,19 +1101,41 @@ function frame(time){
     f.vx*=.9; f.vy*=.9;
     ctx.fillStyle=f.lucky?css('--gold'):css('--accent'); ctx.beginPath(); ctx.arc(f.x,f.y,f.lucky?6:4.5,0,TAU); ctx.fill();
   }
-  for(const k of koi) k.update(food);
-  for(const k of koi) k.draw(k===pick, state!=='result');
+  // photo finish: the near miss, at half speed, so you can see how close it was
+  if(slowFrames>0){ slowFrames--; if(slowFrames%2===0) for(const k of koi) k.update(food); }
+  else for(const k of koi) k.update(food);
+  for(const k of koi) k.draw(mode==='pond' ? state==='racing' : k===pick, state!=='result');
   ripples=ripples.filter(r=>r.life>0);
   for(const r of ripples){ r.r+=1.6; r.life-=.012;
     ctx.strokeStyle=`rgba(255,255,255,${r.life*.5})`; ctx.lineWidth=1.5;
     for(const off of [0,14]) if(r.r-off>0){ ctx.beginPath(); ctx.arc(r.x,r.y,r.r-off,0,TAU); ctx.stroke(); } }
   for(const p of pads) p.draw(time);
+  if(coinBurst.length){
+    coinBurst=coinBurst.filter(c=>c.life>0);
+    ctx.fillStyle=css('--gold');
+    for(const c of coinBurst){ c.vy+=.38; c.x+=c.vx; c.y+=c.vy; c.s+=.2; c.life-=.011;
+      ctx.globalAlpha=Math.min(1,c.life*2);
+      ctx.beginPath(); ctx.ellipse(c.x,c.y,c.r,c.r*Math.abs(Math.cos(c.s)),0,0,TAU); ctx.fill(); }
+    ctx.globalAlpha=1;
+  }
   requestAnimationFrame(frame);
 }
 
-renderSheet(); updateHud();
-openModal(`<h3>Day 1 login streak</h3><p>Here’s 1 free gem. Come back tomorrow for another gem, or every day for 30 days to unlock 2 gems.</p>`,
-  [{label:'Collect', primary:true, onClick:()=>{ closeModal(); say('Tap the water anytime to watch them feed', 3500); }}]);
+// ---- boot ----
+const returning = load();
+if(departed){ const i=koi.findIndex(k=>k.name===departed); if(i>=0) koi.splice(i,1); }
+renderSheet(); updateHud(); checkCredit(); tickerLine();
+if(turboOwned) turbo=false;
+addEventListener('visibilitychange', ()=>{ if(document.hidden){ stopTurbo(); save(); } });
+addEventListener('pagehide', save);
+
+openModal(`<h3>Koi Pond Stakes</h3>
+  <p class="fine">This game does not offer real money gambling, and does not predict success at real money gambling.
+    No real money, card or checkout appears anywhere in it. Everything it does to you, it does for free.</p>`, [
+  {label:'I understand', primary:true, onClick:()=>{
+    closeModal();
+    if(returning && lastSeen) welcomeBack(); else welcomeGem();
+  }}]);
 requestAnimationFrame(frame);
 </script>
 </body>
