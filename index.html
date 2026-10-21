@@ -33,16 +33,24 @@
 
   .hud { position:fixed; top:max(12px,env(safe-area-inset-top)); left:18px; right:18px;
     display:flex; justify-content:space-between; align-items:flex-start; pointer-events:none; }
+  .purse { max-width:70%; min-width:0; }
+  .purse .money { display:flex; align-items:baseline; gap:6px; }
   .purse b { font-size:28px; font-weight:600; font-variant-numeric:tabular-nums; }
   .purse .unit { font-size:16px; }
-  .vip { font-size:13px; font-weight:600; color:var(--gold); border:1.5px solid var(--gold); border-radius:6px; padding:0 5px; margin-left:4px; }
-  .sub { font-size:14px; color:var(--caption); margin-top:2px; font-variant-numeric:tabular-nums; }
+  /* every other balance is a chip, and every chip opens the one place they are explained */
+  .chips { display:flex; flex-wrap:nowrap; gap:5px; margin-top:6px; pointer-events:auto;
+    overflow-x:auto; scrollbar-width:none; }
+  .chips::-webkit-scrollbar { display:none; }
+  .chip { font-size:12px; line-height:18px; padding:1px 8px; border-radius:11px; border:1px solid var(--caption);
+    background:rgba(255,255,255,.22); color:var(--caption); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  @media (prefers-color-scheme: dark) { .chip { background:rgba(0,0,0,.28); } }
+  .chip.gold { color:var(--gold); border-color:var(--gold); }
+  .chip.warn { color:var(--accent); border-color:var(--accent); }
   .shopbtn { pointer-events:auto; padding:8px 16px; border-radius:20px; border:0; background:var(--accent); color:var(--accent-ink); font-weight:600; font-size:16px; }
-  .hudright { display:flex; flex-direction:column; align-items:flex-end; gap:5px; }
-  .minirow { display:flex; gap:5px; pointer-events:auto; }
-  .minirow button { padding:3px 9px; border-radius:12px; border:1px solid var(--caption); background:transparent;
-    color:var(--caption); font-size:12px; position:relative; }
-  .minirow button.alert::after { content:''; position:absolute; top:-2px; right:-2px; width:7px; height:7px;
+  .hudright { display:flex; align-items:center; gap:6px; }
+  .more { pointer-events:auto; width:36px; height:30px; border-radius:15px; border:1px solid var(--caption);
+    background:transparent; color:var(--caption); font-size:15px; line-height:1; padding:0; position:relative; letter-spacing:1px; }
+  .more.alert::after { content:''; position:absolute; top:-2px; right:-2px; width:8px; height:8px;
     border-radius:50%; background:var(--accent); }
   .caption { position:fixed; left:20px; right:20px; top:calc(max(12px,env(safe-area-inset-top)) + 76px);
     text-align:center; font-style:italic; font-size:17px; color:var(--caption); pointer-events:none; margin:0; }
@@ -52,6 +60,12 @@
     box-shadow:0 -6px 30px rgba(0,0,0,.18); transition:transform .35s ease; max-height:72vh; overflow-y:auto; }
   .sheet.hidden { transform:translateY(110%); }
   .sheet h2 { margin:0 0 10px; font-size:19px; font-weight:600; }
+  /* the sheet folds down to its title and its button, so the pond is the default view */
+  .handle { display:block; width:100%; height:20px; background:transparent; border:0; padding:0; margin:-8px 0 2px; position:relative; }
+  .handle::before { content:''; position:absolute; left:50%; top:8px; transform:translateX(-50%);
+    width:38px; height:4px; border-radius:2px; background:var(--line); }
+  .sheet.peek #foldable { display:none; }
+  .sheet.peek h2 { font-size:15px; font-weight:400; opacity:.75; margin-bottom:8px; }
   .fish { display:flex; gap:10px; overflow-x:auto; padding-bottom:4px; scrollbar-width:none; }
   .fish::-webkit-scrollbar { display:none; }
   .fish button { flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:4px;
@@ -65,6 +79,17 @@
   .row[hidden] { display:none; }
   .row button:disabled { opacity:.35; }
   [aria-pressed="true"] { border-color:var(--accent) !important; box-shadow:inset 0 0 0 1.5px var(--accent); }
+  /* one segmented control instead of a row of competing outlines */
+  .row.seg { gap:0; border:1.5px solid var(--line); border-radius:12px; overflow:hidden; }
+  .row.seg button { border:0; border-left:1.5px solid var(--line); border-radius:0; padding:9px 4px; }
+  .row.seg button:first-child { border-left:0; }
+  .row.seg [aria-pressed="true"] { box-shadow:none; background:var(--accent); color:var(--accent-ink); font-weight:600; }
+  /* extras hide behind a single line that says what is switched on */
+  .disclose { display:flex; justify-content:space-between; align-items:center; gap:8px; width:100%; margin:10px 0 0;
+    padding:9px 12px; border:1.5px dashed var(--line); border-radius:12px; background:transparent;
+    font-size:14px; color:var(--caption); text-align:left; }
+  .disclose b { font-weight:600; color:var(--accent); }
+  .disclose span { opacity:.6; }
   .go { width:100%; padding:13px; border:0; border-radius:14px; background:var(--accent); color:var(--accent-ink);
     font-size:17px; font-weight:600; line-height:1.3; }
   .go:disabled { opacity:.4; }
@@ -83,6 +108,19 @@
   .card { background:var(--sheet); color:var(--sheet-ink); border-radius:20px; padding:20px; width:min(360px,100%);
     max-height:80vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,.3); }
   .card h3 { margin:0 0 8px; font-size:21px; }
+  /* every meta-screen lives in one card with one tab bar */
+  .tabs { display:flex; gap:4px; margin:-4px -4px 14px; overflow-x:auto; scrollbar-width:none; }
+  .tabs::-webkit-scrollbar { display:none; }
+  .tabs button { flex:0 0 auto; padding:6px 12px; border-radius:16px; border:1.5px solid var(--line);
+    background:transparent; font-size:14px; position:relative; }
+  .tabs button[aria-selected="true"] { background:var(--accent); color:var(--accent-ink); border-color:transparent; font-weight:600; }
+  .tabs button.alert::after { content:''; position:absolute; top:0; right:2px; width:7px; height:7px;
+    border-radius:50%; background:var(--accent); }
+  .tabs button[aria-selected="true"].alert::after { background:var(--accent-ink); }
+  .kv div { display:flex; justify-content:space-between; gap:12px; font-size:15px; padding:7px 0;
+    border-bottom:1px solid var(--line); font-variant-numeric:tabular-nums; }
+  .kv div span:last-child { white-space:nowrap; }
+  .kv p { margin:2px 0 0; font-size:12px; opacity:.6; font-style:italic; }
   .card p { margin:0 0 10px; line-height:1.45; }
   .card .big { font-size:20px; font-weight:600; }
   .card .fine { font-size:13px; font-style:italic; opacity:.7; }
@@ -113,7 +151,7 @@
   .optin input { margin:1px 0 0; width:14px; height:14px; flex:0 0 auto; }
   .receipt div { display:flex; justify-content:space-between; gap:12px; font-size:15px; padding:3px 0; font-variant-numeric:tabular-nums; }
   .receipt .total { border-top:1px solid var(--line); margin-top:4px; padding-top:6px; font-weight:600; }
-  .toast { position:fixed; z-index:30; left:50%; bottom:calc(max(16px,env(safe-area-inset-bottom)) + 8px); transform:translateX(-50%);
+  .toast { position:fixed; z-index:30; left:50%; bottom:var(--toastUp, 88px); transform:translateX(-50%);
     background:var(--ink); color:var(--water-deep); padding:10px 16px; border-radius:12px; font-size:15px; opacity:0; transition:opacity .25s; pointer-events:none; max-width:86vw; text-align:center; }
   .toast.show { opacity:1; }
   @media (prefers-reduced-motion: reduce) { .sheet, .result, .toast { transition:none; } .egg { animation:none; } }
@@ -133,8 +171,6 @@
     bottom:calc(max(16px,env(safe-area-inset-bottom)) + 12px); font-size:12px; opacity:.5;
     background:transparent; border:0; text-decoration:underline; padding:6px 10px; }
   .exitwatch[hidden] { display:none; }
-  .cashbtn { pointer-events:auto; margin-left:6px; font-size:11px; padding:2px 7px; border-radius:10px;
-    border:1px solid var(--caption); background:transparent; color:var(--caption); vertical-align:3px; }
 
   /* loot reel */
   .reel { height:46px; overflow:hidden; text-align:center; border-top:1px solid var(--line); border-bottom:1px solid var(--line); margin:10px 0; }
@@ -212,24 +248,28 @@
 <body>
 <canvas id="pond" aria-label="Koi pond"></canvas>
 <header class="hud">
-  <div class="purse"><b id="coins">100</b> <span class="unit">coins</span><button class="addcoins" id="addCoins" aria-label="Buy coins">+</button><span class="vip" id="vipTag" hidden>VIP</span><span class="vip" id="whaleTag" hidden>Whale</span><button class="cashbtn" id="cashBtn">Cash out</button>
-    <div class="sub" id="sub"></div></div>
+  <div class="purse">
+    <div class="money"><b id="coins">100</b><span class="unit">coins</span><button class="addcoins" id="addCoins" aria-label="Buy coins">+</button></div>
+    <div class="chips" id="chips"></div>
+  </div>
   <div class="hudright">
     <button class="shopbtn" id="shopBtn">Shop</button>
-    <div class="minirow">
-      <button id="passBtn">Pass</button><button id="questBtn">Quests</button>
-    </div>
+    <button class="more" id="moreBtn" aria-label="Wallet, pass, quests and account">•••</button>
   </div>
 </header>
 <p class="caption" id="caption"></p>
 
 <section class="sheet" id="sheet" aria-label="Place a bet">
+  <button class="handle" id="handle" aria-label="Collapse the bet sheet" aria-expanded="true"></button>
   <h2 id="sheetTitle">Which koi eats the pellet first?</h2>
-  <div class="row" id="modeRow"></div>
-  <div class="row" id="legsRow"></div>
-  <div class="fish" id="fishList"></div>
-  <div class="row" id="amounts"></div>
-  <div class="row" id="extras"></div>
+  <div id="foldable">
+    <div class="row seg" id="modeRow"></div>
+    <div class="row seg" id="legsRow"></div>
+    <div class="fish" id="fishList"></div>
+    <div class="row" id="amounts"></div>
+    <button class="disclose" id="optBtn" hidden></button>
+    <div class="row" id="extras"></div>
+  </div>
   <button class="go" id="go" disabled>Pick a koi</button>
   <div class="smallprint">
     <button id="watchBtn">Just watch the fish</button>
@@ -282,7 +322,7 @@ let turboOwned=false, turbo=false, turboTimer=null;
 let races=0, pity=0, dupProt=false, creditExpires=0, creditTimer=null;
 let streakDay=1, lastSeen=0, limitSet=false, sessionStart=Date.now(), limitTimer=null;
 let departed=null, lastFix=null, nearMiss=false, replayOf=null;
-let rivalScore=0, watching=false, watchTimer=null, pendingCollect=null;
+let rivalScore=0, watching=false, watchTimer=null, pendingCollect=null, optOpen=false, folded=false;
 let coinBurst=[], slowFrames=0;
 // wave two
 let season={tier:0, xp:0, premium:false, ends:0, claimed:[]};
@@ -440,6 +480,11 @@ const koi = Array.from({length: W<500 ? 6 : 8}, (_,i) => new Koi(i));
 const pads = Array.from({length: Math.round(Math.max(4, W*H/80000))}, () => new LilyPad());
 let food=[], ripples=[], captionTimer=null, toastTimer=null, modalTimers=[];
 
+function syncToast(){
+  const sh=$('sheet');
+  const up = (watching || sh.classList.contains('hidden')) ? 16 : sh.offsetHeight + 10;
+  document.documentElement.style.setProperty('--toastUp', up+'px');
+}
 function say(text, ms){ $('caption').textContent=text; clearTimeout(captionTimer);
   if(ms) captionTimer=setTimeout(()=>{ $('caption').textContent=''; }, ms); }
 function toast(text){ const t=$('toast'); t.textContent=text; t.classList.add('show');
@@ -510,12 +555,15 @@ const boostMult = () => boosted ? 1.05 : 1;
 const betCost   = () => Math.round(mode==='pond' ? pondTotal(stake) : stake*(boosted&&mode==='single'?2:1));
 
 function renderSheet(){
-  $('sheetTitle').textContent = mode==='parlay' ? 'Pick a koi to win several races in a row'
-    : mode==='pond' ? `Feed the whole pond — every koi is backed, so somebody always wins`
+  const modeName = mode==='parlay' ? `Parlay, ${legs} legs` : mode==='pond' ? 'Feed the pond' : 'Single';
+  $('sheetTitle').textContent = folded
+    ? [modeName, pick && pick.name, `${fmt(stake)} coins`].filter(Boolean).join(' · ')
+    : mode==='parlay' ? 'How many races in a row?'
+    : mode==='pond' ? 'Feed the whole pond. Every koi is backed, so somebody always wins'
     : 'Which koi eats the pellet first?';
-  toggleRow($('modeRow'), [['Single','single'],['Parlay','parlay'],['Feed the pond','pond']], mode, v=>{ mode=v; if(v==='pond') pick=null; });
+  toggleRow($('modeRow'), [['Single','single'],['Parlay','parlay'],['Pond','pond']], mode, v=>{ mode=v; if(v==='pond') pick=null; });
   $('legsRow').hidden = mode!=='parlay';
-  toggleRow($('legsRow'), [['2 legs',2],['3 legs',3],['4 legs',4],['6 legs',6]], legs, v=>{ legs=v; });
+  toggleRow($('legsRow'), [['2',2],['3',3],['4',4],['6',6]], legs, v=>{ legs=v; });
 
   const list=$('fishList'); list.innerHTML='';
   list.classList.toggle('dim', mode==='pond');
@@ -541,7 +589,14 @@ function renderSheet(){
   if(mode==='parlay') extras.push(['Insurance, 2 gems','ins', gems<2 && !insured]);
   if(mode==='single') extras.push(['Boosted odds!','boost']);
   if(turboOwned) extras.push(['Turbo pond','turbo']);
-  $('extras').hidden = !extras.length;
+  const on=[]; if(useLucky) on.push('Lucky pellet'); if(insured) on.push('Insurance');
+  if(boosted && mode==='single') on.push('Boosted odds'); if(turbo) on.push('Turbo');
+  const opt=$('optBtn');
+  opt.hidden = !extras.length;
+  opt.innerHTML = `<span>Options</span>${on.length ? `<b>${on.join(' · ')}</b>` : `<span>none</span>`}`;
+  opt.setAttribute('aria-expanded', optOpen);
+  opt.onclick = ()=>{ optOpen=!optOpen; renderSheet(); };
+  $('extras').hidden = !extras.length || !optOpen;
   $('extras').innerHTML='';
   for(const [label,key,disabled] of extras){
     const b=document.createElement('button'); b.textContent=label; b.disabled=!!disabled;
@@ -555,13 +610,13 @@ function renderSheet(){
   }
 
   const go=$('go');
-  if(coins<=0){ go.disabled=false; go.textContent='Out of coins. Tap to get more'; return; }
+  if(coins<=0){ go.disabled=false; go.textContent='Out of coins. Tap to get more'; syncToast(); return; }
   const cost=betCost();
   if(mode==='pond'){
     go.disabled = cost>coins;
     go.textContent = cost>coins ? `Feed the pond needs ${fmt(cost)} coins`
       : `Stake ${stake} on each of ${koi.length} koi (${fmt(cost)}) — guaranteed win of ${fmt(pondBack(stake))}`;
-    return;
+    syncToast(); return;
   }
   go.disabled = !pick || stake<=0 || cost>coins || pick.resting;
   go.textContent = !pick ? 'Pick a koi'
@@ -569,6 +624,7 @@ function renderSheet(){
     : cost>coins ? `Boosted odds need ${fmt(cost)} coins`
     : mode==='parlay' ? `Bet ${stake}: ${pick.name} wins ${legs} in a row to win ${fmt(parlayPay(pick,legs,stake))}`
     : `Bet ${fmt(cost)} on ${pick.name} to win ${fmt(Math.round(stake*pick.odds*boostMult()))}`;
+  syncToast();
 }
 $('go').onclick=()=>{
   if(coins<=0) return brokeModal();
@@ -585,24 +641,30 @@ $('go').onclick=()=>{
   bump('bets'); bump('stake', cost);
   if(mode==='parlay') bump('parlay');
   if(mode==='pond') bump('pond');
-  updateHud(); save(); state='armed'; $('sheet').classList.add('hidden');
+  updateHud(); save(); state='armed'; $('sheet').classList.add('hidden'); syncToast();
   say(parlay ? `Leg 1 of ${legs}. Tap the water to drop the pellet`
     : mode==='pond' ? 'Tap the water. One of them is yours, and all of them are yours'
     : 'Tap the water to drop the pellet');
   if(turbo) scheduleTurbo();
 };
 
+// the HUD carries balances only. everything they mean lives in the wallet
+const chip = (label, tab, cls='') => `<button class="chip ${cls}" data-tab="${tab}">${label}</button>`;
 function updateHud(){
   $('coins').textContent=fmt(coins);
-  $('vipTag').hidden=!vip;
-  const bits=[`${gems} ${gems===1?'gem':'gems'}`, `${pellets}/${MAX_PELLETS} pellets`];
-  if(scales) bits.push(`${fmt(scales)} Koi Scales`);
-  if(credit) bits.push(`${fmt(credit)} Pond Credit${creditExpires?` (expires in ${Math.max(0,Math.ceil((creditExpires-Date.now())/3600e3))}h)`:''}`);
-  bits.push(`day ${streakDay} streak`, `pass tier ${season.tier}`, loyalty()[0]);
-  if(spent) bits.push(`${money(spent)} pretend spent`);
-  $('whaleTag').hidden=!whale;
-  if(wins+losses) bits.push(`${wins} won, ${losses} lost`);
-  $('sub').textContent=bits.join(', ');
+  const c=[chip(`◆ ${fmt(gems)}`,'wallet'), chip(`${pellets}/${MAX_PELLETS} pellets`,'wallet', pellets?'':'warn')];
+  const [tier]=loyalty(), rest=[];
+  if(credit) rest.push(chip(`${fmt(credit)} credit`,'wallet','gold'));
+  if(tier!=='Minnow') rest.push(chip(tier,'account','gold'));
+  if(whale) rest.push(chip('Whale','wallet','gold'));
+  if(vip)   rest.push(chip('VIP','shop','gold'));
+  if(scales) rest.push(chip(`${fmt(scales)} scales`,'wallet'));
+  if(rest.length) c.push(rest[0]);
+  if(rest.length>1) c.push(chip(`+${rest.length-1}`,'wallet'));
+  const el=$('chips');
+  el.innerHTML=c.join('');
+  el.querySelectorAll('.chip').forEach(b=>b.onclick=()=>openHub(b.dataset.tab));
+  markAlerts();
 }
 
 // ---- races ----
@@ -684,7 +746,7 @@ function photoFinish(){
     <p class="fine">Replays are shown exactly as the race was run.</p>`, [
     {label:'Replay that race — 3 gems', primary:true, disabled:gems<3, onClick:()=>{
       spendGems(3); replayOf=snap; closeModal();
-      state='armed'; $('sheet').classList.add('hidden'); say('Replaying. Tap the water to drop the pellet'); }},
+      state='armed'; $('sheet').classList.add('hidden'); syncToast(); say('Replaying. Tap the water to drop the pellet'); }},
     {label:'Let it go', onClick:()=>{ closeModal(); endRound(); }}]);
 }
 function endRound(){
@@ -692,7 +754,7 @@ function endRound(){
   luckyThisRace=false;
   if(!turbo) pick=null;
   state='betting'; renderSheet(); updateHud(); save();
-  $('sheet').classList.remove('hidden');
+  $('sheet').classList.remove('hidden'); syncToast();
   if(coins<=0){ stopTurbo(); return setTimeout(brokeModal, 400); }
   if(races>0 && races%50===0){ stopTurbo(); return setTimeout(wrapped, 500); }
   if(lossStreak>=6 && !departed){ stopTurbo(); return setTimeout(fishLeaves, 500); }
@@ -756,11 +818,72 @@ function energyDrink(k){
 }
 
 // ---- modals ----
-function openModal(html, buttons){
+function openModal(html, buttons, tab){
   clearModalTimers();
-  $('card').innerHTML = html + '<div class="actions" id="actions"></div>';
+  $('card').innerHTML = (tab ? hubTabs(tab) : '') + html + '<div class="actions" id="actions"></div>';
   setButtons(buttons);
   $('modal').hidden=false;
+  $('card').scrollTop=0;
+  if(tab){
+    const t=$('tabs');
+    if(t) t.querySelectorAll('button').forEach(b=>b.onclick=()=>openHub(b.dataset.tab));
+  }
+}
+
+// ---- the hub: five tabs instead of five buttons and twenty-five dead ends ----
+const HUB=[['wallet','Wallet'],['shop','Shop'],['pass','Pass'],['quests','Quests'],['account','Account']];
+const questsReady = () => quests.some(q=>!q.claimed && q.n>=q.target);
+const passReady   = () => season.premium && season.tier>season.claimed.length;
+function hubTabs(active){
+  return `<div class="tabs" id="tabs">` + HUB.map(([k,label])=>{
+    const alert = (k==='quests' && questsReady()) || (k==='pass' && passReady());
+    return `<button data-tab="${k}" aria-selected="${k===active}" class="${alert?'alert':''}">${label}</button>`;
+  }).join('') + `</div>`;
+}
+function openHub(tab){
+  if(tab==='shop')   return openShop();
+  if(tab==='pass')   return openPass();
+  if(tab==='quests') return openQuests();
+  if(tab==='account')return openAccount();
+  return openWallet();
+}
+function markAlerts(){
+  const m=$('moreBtn');
+  if(m) m.classList.toggle('alert', questsReady() || passReady());
+}
+function openWallet(){
+  const hrs=credit && creditExpires ? Math.max(0,Math.ceil((creditExpires-Date.now())/3600e3)) : 0;
+  openModal(`<h3>Wallet</h3><div class="kv">
+      <div><span>Coins<p>The only thing you can bet.</p></span><span>${fmt(coins)}</span></div>
+      <div><span>Gems<p>Bought with coins. Cannot be turned back into coins.</p></span><span>${fmt(gems)}</span></div>
+      <div><span>Koi Scales<p>What is left over. Converts back at 100:1, in bundles of five gems only.</p></span><span>${fmt(scales)}</span></div>
+      <div><span>Pond Credit<p>${credit?`Expires in ${hrs}h. Cannot be spent on anything.`:'Cannot be spent on anything.'}</p></span><span>${fmt(credit)}</span></div>
+      <div><span>Pellets<p>One per bet. The countdown does not actually refill them.</p></span><span>${pellets}/${MAX_PELLETS}</span></div>
+      <div><span>Pretend spent</span><span>${money(spent)}</span></div>
+      <div><span>Record</span><span>${fmt(wins)} won, ${fmt(losses)} lost</span></div>
+      <div><span>Login streak</span><span>day ${fmt(streakDay)}</span></div>
+      <div><span>Pass tier</span><span>${season.tier} of ${MAX_TIER}</span></div>
+      <div><span>Loyalty</span><span>${loyalty()[0]}</span></div>
+    </div>`, [
+    {label:'Buy coins', primary:true, onClick:openStore},
+    {label:'Cash out', onClick:cashOut},
+    {label:'Close', onClick:closeModal}], 'wallet');
+}
+const ACCOUNT=[
+  ['Leaderboard','Where you stand, against people who are not real.', ()=>leaderboard()],
+  ['Loyalty','A tier you rent by spending, and lose by stopping.', ()=>openLadder()],
+  ['Invite a friend','You both get 50 coins. They get theirs later.', ()=>invite()],
+  ['Fairness & returns','Certified by a wholly owned subsidiary of this pond.', ()=>fairness()],
+  ['Play responsibly','Our commitment, and where the limits are kept.', ()=>responsible()],
+  ['Settings','Sound, odds format, and whatever else is in there.', ()=>settings1()],
+  ['Your data','What we know. It is more than you would like.', ()=>myData()],
+  ['Delete your pond','Thirty days, unless you log in.', ()=>deleteAccount()],
+];
+function openAccount(){
+  openModal(`<h3>Account</h3>` + ACCOUNT.map(([name,desc],i)=>
+      `<div class="item"><div><b>${name}</b><p>${desc}</p></div><button data-i="${i}">Open</button></div>`).join(''),
+    [{label:'Close', onClick:closeModal}], 'account');
+  $('card').querySelectorAll('.item button').forEach(b=>b.onclick=()=>ACCOUNT[+b.dataset.i][2]());
 }
 function setButtons(buttons){
   const a=$('actions'); a.innerHTML='';
@@ -845,11 +968,8 @@ function openShop(){
   openModal(`<h3>Pond shop</h3><p class="fine">You have ${fmt(coins)} coins, ${gems} ${gems===1?'gem':'gems'}${scales?`, ${fmt(scales)} Koi Scales`:''}.
       You are in pricing experiment group ${abGroup}. Prices in group ${abGroup} are higher. This cannot be changed.</p>` +
     items.map((it,i)=>`<div class="item"><div><b>${it.name}</b><p>${it.desc}</p></div><button data-i="${i}" ${it.can?'':'disabled'}>${it.price}</button></div>`).join(''),
-    [{label:'Leaderboard', onClick:leaderboard},
-     {label:`Loyalty — ${loyalty()[0]}`, onClick:openLadder},
-     {label:'Invite a friend', onClick:invite},
-     {label:'Fairness & returns', onClick:fairness},
-     {label:'Close', onClick:closeModal}]);
+    [{label:'Odds disclosure', onClick:lootOdds},
+     {label:'Close', onClick:closeModal}], 'shop');
   $('card').querySelectorAll('.item button').forEach(b=>b.onclick=()=>{
     const it=items[+b.dataset.i]; if(!it.can) return;
     const r=it.buy(); updateHud(); renderSheet(); save();
@@ -863,11 +983,10 @@ function fairness(){
     <p class="big">Return to player: ${SHOWN_RATE_NOTE}</p>
     <p class="fine">“Up to” is doing all of the work in that sentence. Displayed odds are indicative and are not the
       basis on which winnings are paid. Races are not simulations of real koi.</p>`,
-    [{label:'Odds disclosure', onClick:lootOdds},
-     {label:'View a race replay', onClick:()=>openModal(`<h3>Replay</h3>
+    [{label:'View a race replay', onClick:()=>openModal(`<h3>Replay</h3>
         <p>Your koi swam toward the pellet at a normal speed and did not reach it first.</p>
         <p class="fine">Replays show the race as it was run.</p>`, [{label:'Back', onClick:fairness}])},
-     {label:'Back to shop', primary:true, onClick:openShop}]);
+     {label:'Back', primary:true, onClick:openAccount}]);
 }
 const RIVALS=['Kenji_84','pondlife99','MrsOkada','three_koi','Big Sumi','hanalover','the_filter'];
 function leaderboard(){
@@ -883,7 +1002,7 @@ function leaderboard(){
     </div><p class="fine" style="margin-top:10px">${rival} is ${fmt(rivalScore-me)} ahead. ${rival} has been
       ${fmt(rivalScore-me)} ahead since you started.</p>`,
     [{label:'Buy coins to climb', primary:true, onClick:openStore},
-     {label:'Back to shop', onClick:openShop}]);
+     {label:'Back', onClick:openAccount}]);
   save();
 }
 
@@ -918,6 +1037,7 @@ function hatchEgg(){
   }
 }
 $('shopBtn').onclick=openShop;
+$('moreBtn').onclick=()=>openHub('wallet');
 
 // ---- buy coins (everything is pretend money) ----
 function openStore(){
@@ -1028,7 +1148,6 @@ function convertToGems(){
       toast(`Converted. You now have ${gems} gems and nothing to bet.`); }},
     {label:'Back', onClick:cashOut}]);
 }
-$('cashBtn').onclick=cashOut;
 
 // ---- compliance, theatrically ----
 function overLimit(){
@@ -1046,7 +1165,7 @@ function responsible(){
     {label:'Helpful resources', onClick:()=>openModal(`<h3>Helpful resources</h3><p>Coming soon.</p>`,
       [{label:'Back', onClick:responsible}])},
     {label:'Account settings', onClick:settings1},
-    {label:'Close', primary:true, onClick:closeModal}]);
+    {label:'Back', primary:true, onClick:openAccount}]);
 }
 function settings1(){
   openModal(`<h3>Account settings</h3><p class="fine">Pond name, notifications, data, preferences.</p>`, [
@@ -1054,7 +1173,7 @@ function settings1(){
     {label:'Download your data', onClick:myData},
     {label:'Preferences', onClick:settings2},
     {label:'Delete your pond', tiny:true, onClick:deleteAccount},
-    {label:'Back', onClick:responsible}]);
+    {label:'Back', onClick:openAccount}]);
 }
 const FMTS={frac:'Fractional (9:1)', dec:'Decimal (9.50)', amer:'American (+900)'};
 function settings2(){
@@ -1083,13 +1202,14 @@ $('footBtn').onclick=responsible;
 function startWatch(){
   watching=true; document.body.classList.add('watching');
   $('sheet').classList.add('hidden'); stopTurbo(); say('');
-  $('exitWatch').hidden=false;
+  $('exitWatch').hidden=false; syncToast();
   clearTimeout(watchTimer); watchTimer=setTimeout(nag, 20000);
 }
 function stopWatch(){
   watching=false; document.body.classList.remove('watching');
-  $('exitWatch').hidden=true; clearTimeout(watchTimer);
+  $('exitWatch').hidden=true; clearTimeout(watchTimer); syncToast();
   if(state==='betting') $('sheet').classList.remove('hidden');
+  syncToast();
 }
 function nag(){
   if(!watching) return;
@@ -1100,6 +1220,15 @@ function nag(){
 }
 $('watchBtn').onclick=startWatch;
 $('exitWatch').onclick=stopWatch;
+
+// fold the sheet down to its title and its button
+function setFold(v){
+  folded=v;
+  $('sheet').classList.toggle('peek', folded);
+  $('handle').setAttribute('aria-expanded', String(!folded));
+  renderSheet(); syncToast();
+}
+$('handle').onclick=()=>setFold(!folded);
 
 // ---- other people's good fortune ----
 const TICKS=[
@@ -1244,7 +1373,7 @@ function openPass(){
     ...(owed>0 ? [{label:`Claim ${owed} ${owed===1?'reward':'rewards'}`, primary:true, onClick:claimPass}] : []),
     {label:'Buy 5 tiers — 10 gems', disabled:gems<10 || season.tier>=MAX_TIER, onClick:()=>{
       spendGems(10); season.tier=Math.min(MAX_TIER, season.tier+5); save(); updateHud(); openPass(); }},
-    {label:'Close', onClick:closeModal}]);
+    {label:'Close', onClick:closeModal}], 'pass');
 }
 function claimPass(){
   let got=0, coinsGot=0;
@@ -1301,19 +1430,13 @@ function openQuests(){
       const pool=QUEST_POOL.filter(q=>!quests.some(x=>x.id===q.id));
       quests[i]={...(pool[Math.floor(Math.random()*pool.length)]||QUEST_POOL[0]), n:0, claimed:false};
       save(); updateHud(); openQuests(); }},
-    {label:'Close', onClick:closeModal}]);
+    {label:'Close', onClick:closeModal}], 'quests');
   $('card').querySelectorAll('.quest button').forEach(b=>b.onclick=()=>{
     const q=quests[+b.dataset.i];
     if(!q || q.claimed || q.n<q.target) return;
     q.claimed=true; gems+=q.reward; save(); updateHud(); renderSheet();
     toast(`+${q.reward} ${q.reward===1?'gem':'gems'}`); openQuests();
   });
-}
-function markAlerts(){
-  const qReady = quests.some(q=>!q.claimed && q.n>=q.target);
-  const pReady = season.premium && season.tier>season.claimed.length;
-  $('questBtn').classList.toggle('alert', qReady);
-  $('passBtn').classList.toggle('alert', pReady);
 }
 
 // ---- loyalty, which decays ----
@@ -1436,7 +1559,7 @@ function myData(){
     <p>inferred_region: the one with the higher prices</p><p>partners_shared_with: 1,431</p></div>
     <p class="fine" style="margin-top:10px">A full export will be prepared and sent within 30 days.</p>`, [
     {label:'Request full export', primary:true, onClick:()=>{ toast('Requested. It will arrive within 30 days.'); }},
-    {label:'Back', onClick:settings1}]);
+    {label:'Back', onClick:openAccount}]);
 }
 function deleteAccount(){
   openModal(`<h3>Delete your pond</h3><p>This removes your coins, your hats, your streak, and ${koi.length} koi
@@ -1492,8 +1615,6 @@ function lootOdds(){
     [{label:'Back to shop', primary:true, onClick:openShop}, {label:'Close', onClick:closeModal}]);
 }
 
-$('passBtn').onclick=openPass;
-$('questBtn').onclick=openQuests;
 
 // ---- input ----
 function dropPellet(x,y){
