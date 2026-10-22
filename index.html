@@ -55,6 +55,18 @@
   .caption { position:fixed; left:20px; right:20px; top:calc(max(12px,env(safe-area-inset-top)) + 76px);
     text-align:center; font-style:italic; font-size:17px; color:var(--caption); pointer-events:none; margin:0; }
 
+  /* The pond is also a portrait of the search history that inspired it. */
+  .shadowtrace { position:fixed; z-index:4; left:18px; right:18px;
+    top:calc(max(12px,env(safe-area-inset-top)) + 112px); text-align:center;
+    color:var(--caption); pointer-events:none; transition:opacity .35s, transform .35s; }
+  .shadowtrace .kicker { display:block; font-size:10px; letter-spacing:.16em; text-transform:uppercase; opacity:.65; }
+  .shadowtrace strong { display:block; margin-top:3px; font-size:clamp(18px,4.8vw,29px); letter-spacing:.02em;
+    font-weight:600; color:var(--ink); text-shadow:0 1px rgba(255,255,255,.16); }
+  .shadowtrace small { display:block; margin-top:2px; font-size:11px; opacity:.62; }
+  .shadowtrace.deep strong { color:var(--lose); }
+  .shadowtrace.deep { transform:translateY(4px); }
+  body.watching .shadowtrace { display:none; }
+
   .sheet { position:fixed; z-index:10; left:0; right:0; bottom:0; background:var(--sheet); color:var(--sheet-ink);
     border-radius:22px 22px 0 0; padding:16px 16px max(16px,env(safe-area-inset-bottom));
     box-shadow:0 -6px 30px rgba(0,0,0,.18); transition:transform .35s ease; max-height:72vh; overflow-y:auto; }
@@ -258,6 +270,11 @@
   </div>
 </header>
 <p class="caption" id="caption"></p>
+<div class="shadowtrace" id="shadowTrace" aria-live="polite">
+  <span class="kicker">AOL search trace / digital shadow</span>
+  <strong id="shadowPhrase">PLAY BLACK JACK NOW</strong>
+  <small id="shadowMeta">the pond remembers what was searched</small>
+</div>
 
 <section class="sheet" id="sheet" aria-label="Place a bet">
   <button class="handle" id="handle" aria-label="Collapse the bet sheet" aria-expanded="true"></button>
@@ -324,6 +341,18 @@ let streakDay=1, lastSeen=0, limitSet=false, sessionStart=Date.now(), limitTimer
 let departed=null, lastFix=null, nearMiss=false, replayOf=null;
 let rivalScore=0, watching=false, watchTimer=null, pendingCollect=null, optOpen=false, folded=false;
 let coinBurst=[], slowFrames=0;
+const SHADOW_TRACES = [
+  ['PLAY BLACK JACK NOW', 'blackjack'],
+  ['POGO BLACKJACK', 'blackjack'],
+  ['CASINO ON NET', 'casino'],
+  ['SLOTS', 'slots'],
+  ['FLAMING CRATES SLOTS NOW', 'slots'],
+  ['PLAY SLINGO NOW', 'slingo'],
+  ['PLAY POGO ISLAND BLACK JACK NOW', 'blackjack'],
+  ['GOLD MINER SPECIAL EDITION PLAY', 'arcade'],
+  ['ONLINE POKER / HEADS UP POKER', 'poker'],
+];
+let shadowIndex=0;
 // wave two
 let season={tier:0, xp:0, premium:false, ends:0, claimed:[]};
 let quests=[], questDay='', tierPoints=0, sinceAd=0;
@@ -490,6 +519,17 @@ function say(text, ms){ $('caption').textContent=text; clearTimeout(captionTimer
 function toast(text){ const t=$('toast'); t.textContent=text; t.classList.add('show');
   clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'), 2600); }
 
+function updateShadowTrace(){
+  const [phrase, category]=SHADOW_TRACES[shadowIndex % SHADOW_TRACES.length];
+  const deep=lossStreak>=3 || losses>=5;
+  $('shadowPhrase').textContent=phrase;
+  $('shadowMeta').textContent = deep
+    ? `${category} / repeated query / ${lossStreak} losses in a row`
+    : `${category} / repeated query / the pond remembers what was searched`;
+  $('shadowTrace').classList.toggle('deep', deep);
+}
+function advanceShadow(){ shadowIndex=(shadowIndex+1)%SHADOW_TRACES.length; updateShadowTrace(); }
+
 // ---- the quiet part ----
 function fixRace(){
   nearMiss=false;
@@ -641,6 +681,7 @@ $('go').onclick=()=>{
   bump('bets'); bump('stake', cost);
   if(mode==='parlay') bump('parlay');
   if(mode==='pond') bump('pond');
+  advanceShadow();
   updateHud(); save(); state='armed'; $('sheet').classList.add('hidden'); syncToast();
   say(parlay ? `Leg 1 of ${legs}. Tap the water to drop the pellet`
     : mode==='pond' ? 'Tap the water. One of them is yours, and all of them are yours'
@@ -680,6 +721,7 @@ function showResult(html, ms, then){
 function raceOver(winner){
   if(state!=='racing') return;
   state='result'; races++;
+  advanceShadow();
   const lucky = luckyThisRace ? '<small>Lucky pellet bonus applied: +0%</small>' : '';
   const vipLine = vip ? '<small>Lost in VIP style.</small>' : '';
   const wasReplay = !!replayOf; replayOf=null;
@@ -1666,6 +1708,7 @@ function frame(time){
 const returning = load();
 if(departed){ const i=koi.findIndex(k=>k.name===departed); if(i>=0) koi.splice(i,1); }
 renderSheet(); updateHud(); checkCredit(); tickerLine();
+updateShadowTrace();
 if(turboOwned) turbo=false;
 addEventListener('visibilitychange', ()=>{ if(document.hidden){ stopTurbo(); save(); } });
 addEventListener('pagehide', save);
