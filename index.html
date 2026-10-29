@@ -57,18 +57,6 @@
   .caption { position:fixed; left:20px; right:20px; top:calc(max(12px,env(safe-area-inset-top)) + 76px);
     text-align:center; font-style:italic; font-size:17px; color:var(--caption); pointer-events:none; margin:0; }
 
-  /* The pond is also a portrait of the search history that inspired it. */
-  .shadowtrace { position:fixed; z-index:4; left:18px; right:18px;
-    top:calc(max(12px,env(safe-area-inset-top)) + 112px); text-align:center;
-    color:var(--caption); pointer-events:none; transition:opacity .35s, transform .35s; }
-  .shadowtrace .kicker { display:block; font-size:10px; letter-spacing:.16em; text-transform:uppercase; opacity:.65; }
-  .shadowtrace strong { display:block; margin-top:3px; font-size:clamp(18px,4.8vw,29px); letter-spacing:.02em;
-    font-weight:600; color:var(--ink); text-shadow:0 1px rgba(255,255,255,.16); }
-  .shadowtrace small { display:block; margin-top:2px; font-size:11px; opacity:.62; }
-  .shadowtrace.deep strong { color:var(--lose); }
-  .shadowtrace.deep { transform:translateY(4px); }
-  body.watching .shadowtrace { display:none; }
-
   .sheet { position:fixed; z-index:10; left:0; right:0; bottom:0; background:var(--sheet); color:var(--sheet-ink);
     border-radius:22px 22px 0 0; padding:16px 16px max(16px,env(safe-area-inset-bottom));
     box-shadow:0 -6px 30px rgba(0,0,0,.18); transition:transform .35s ease; max-height:72vh; overflow-y:auto; }
@@ -146,9 +134,6 @@
   .item p { margin:2px 0 0; font-size:14px; opacity:.8; }
   .item button { flex:0 0 auto; padding:8px 12px; border-radius:10px; border:1.5px solid var(--accent); background:transparent; font-size:14px; white-space:nowrap; }
   .item button:disabled { opacity:.35; }
-  .ad { border:2px dashed var(--line); border-radius:14px; padding:22px 14px; text-align:center; }
-  .ad .tag { font-size:12px; opacity:.6; }
-  .ad .title { font-size:30px; font-weight:700; margin:8px 0; color:var(--accent); }
   .egg { font-size:56px; text-align:center; animation:wobble .3s infinite alternate; }
   @keyframes wobble { from { transform:rotate(-12deg); } to { transform:rotate(12deg); } }
   .addcoins { pointer-events:auto; width:30px; height:30px; border-radius:50%; border:0; margin-left:6px; vertical-align:4px;
@@ -229,10 +214,23 @@
   .quest button { flex:0 0 auto; padding:6px 10px; border-radius:10px; border:1.5px solid var(--accent); background:transparent; font-size:13px; }
   .quest button:disabled { opacity:.3; }
 
-  /* interstitial */
-  .full { position:fixed; inset:0; z-index:40; background:#111; color:#eee; display:flex; flex-direction:column;
-    align-items:center; justify-content:center; text-align:center; padding:24px; }
+  /* every ad: the pond goes dark from the edges in, then the ad is all there is */
+  @property --iris { syntax:'<percentage>'; inherits:false; initial-value:-15%; }
+  .full { position:fixed; inset:0; z-index:40; color:#eee; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; padding:24px; isolation:isolate; }
   .full[hidden] { display:none; }
+  .full::before { content:''; position:absolute; inset:0; z-index:-1; --iris:-15%;
+    background:radial-gradient(circle at 50% 45%, transparent var(--iris), #111 calc(var(--iris) + 15%)); }
+  .full.closing::before { animation:iris 1.4s ease-in both; }
+  .full.closing > * { animation:adin .5s 1.1s both; }
+  @keyframes iris { from { --iris:110%; } to { --iris:-15%; } }
+  @keyframes adin { from { opacity:0; } to { opacity:1; } }
+  @media (prefers-reduced-motion: reduce) { .full.closing::before, .full.closing > * { animation:none; } }
+  .full p { max-width:28em; }
+  .full .adtimer { min-height:1.3em; margin:14px 0 0; opacity:.7; font-variant-numeric:tabular-nums; }
+  .adacts { display:flex; gap:8px; margin-top:12px; min-height:46px; }
+  .adacts button { padding:12px 22px; border-radius:12px; border:1.5px solid #555; background:transparent; color:#eee; font-size:16px; }
+  .adacts button.primary { background:var(--accent); color:var(--accent-ink); border-color:transparent; font-weight:600; }
   .full .big { font-size:40px; font-weight:700; color:#f5a623; margin:10px 0; }
   .full small { opacity:.5; font-size:12px; }
   .x { position:absolute; top:max(14px,env(safe-area-inset-top)); right:14px; width:18px; height:18px; line-height:16px;
@@ -273,11 +271,6 @@
   </div>
 </header>
 <p class="caption" id="caption"></p>
-<div class="shadowtrace" id="shadowTrace" aria-live="polite">
-  <span class="kicker">AOL search trace / digital shadow</span>
-  <strong id="shadowPhrase">POGO BLACKJACK</strong>
-  <small id="shadowMeta">the pond remembers what was searched</small>
-</div>
 
 <section class="sheet" id="sheet" aria-label="Place a bet">
   <button class="handle" id="handle" aria-label="Collapse the bet sheet" aria-expanded="true"></button>
@@ -345,17 +338,6 @@ let streakDay=1, lastSeen=0, limitSet=false, sessionStart=Date.now(), limitTimer
 let departed=null, lastFix=null, nearMiss=false, replayOf=null;
 let rivalScore=0, watching=false, watchTimer=null, pendingCollect=null, optOpen=false, folded=false;
 let coinBurst=[], slowFrames=0;
-const SHADOW_TRACES = [
-  ['POGO BLACKJACK', 'blackjack'],
-  ['CASINO ON NET', 'casino'],
-  ['SLOTS', 'slots'],
-  ['FLAMING CRATES SLOTS NOW', 'slots'],
-  ['PLAY SLINGO NOW', 'slingo'],
-  ['PLAY POGO ISLAND BLACK JACK NOW', 'blackjack'],
-  ['GOLD MINER SPECIAL EDITION PLAY', 'arcade'],
-  ['ONLINE POKER / HEADS UP POKER', 'poker'],
-];
-let shadowIndex=0;
 // wave two
 let season={tier:0, xp:0, premium:false, ends:0, claimed:[]};
 let quests=[], questDay='', tierPoints=0, sinceAd=0;
@@ -524,17 +506,6 @@ function say(text, ms){ $('caption').textContent=text; clearTimeout(captionTimer
 function toast(text){ const t=$('toast'); t.textContent=text; t.classList.add('show');
   clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'), 2600); }
 
-function updateShadowTrace(){
-  const [phrase, category]=SHADOW_TRACES[shadowIndex % SHADOW_TRACES.length];
-  const deep=lossStreak>=3 || losses>=5;
-  $('shadowPhrase').textContent=phrase;
-  $('shadowMeta').textContent = deep
-    ? `${category} / repeated query / ${lossStreak} losses in a row`
-    : `${category} / repeated query / the pond remembers what was searched`;
-  $('shadowTrace').classList.toggle('deep', deep);
-}
-function advanceShadow(){ shadowIndex=(shadowIndex+1)%SHADOW_TRACES.length; updateShadowTrace(); }
-
 // ---- the quiet part ----
 function fixRace(){
   nearMiss=false;
@@ -686,7 +657,6 @@ $('go').onclick=()=>{
   bump('bets'); bump('stake', cost);
   if(mode==='parlay') bump('parlay');
   if(mode==='pond') bump('pond');
-  advanceShadow();
   updateHud(); save(); state='armed'; $('sheet').classList.add('hidden'); syncToast();
   say(parlay ? `Leg 1 of ${legs}. Tap the water to drop the pellet`
     : mode==='pond' ? 'Tap the water. One of them is yours, and all of them are yours'
@@ -726,7 +696,6 @@ function showResult(html, ms, then){
 function raceOver(winner){
   if(state!=='racing') return;
   state='result'; races++;
-  advanceShadow();
   const lucky = luckyThisRace ? '<small>Lucky pellet bonus applied: +0%</small>' : '';
   const vipLine = vip ? '<small>Lost in VIP style.</small>' : '';
   const wasReplay = !!replayOf; replayOf=null;
@@ -965,31 +934,46 @@ function outOfPellets(){
   tick(); every(1000, tick);
 }
 
-const ADS=[
-  ['Pogo Blackjack Bonus Table™','A familiar blackjack room, now rendered as a pond. Your search history says you like a table with a little pressure.'],
-  ['Flaming Crates Slots™','Open another crate for a chance at a louder reward. The reels remember what you clicked.'],
-  ['Slingo Social Club™','Bingo numbers, slot-machine lights, and one more round. Your saved interests qualify you for a free entry.'],
-  ['Gold Miner Special Edition™','Dig deeper for bonus gold. The next layer is always just one tap away.'],
-  ['Heads Up Poker Lounge™','A private table for people who keep playing after the first hand. Limited seats, unlimited rebuys.'],
-];
-function personalizedAd(){ return ADS[shadowIndex % ADS.length]; }
+// ---- ads: every ad is the same unit. The pond closes in from the edges until it is
+// gone, and then the ad is the only thing left to look at. ----
+const ADS=[['Koi Max™','The only fish food that is also a fish.'],
+           ['Pellet Pro','Nine out of ten koi could not be reached for comment.'],
+           ['PondGuard+','Coverage for every fish, except the ones you have.'],
+           ['ClearWater Premium','See your pond like never before. Starting after this ad.']];
+let adTimer=null;
+// tag: the line above the ad. secs: how long before onEnd. count: label for the countdown, if any.
+function showAd({tag='Advertisement', secs=5, count='', failed=false, onEnd}){
+  clearInterval(adTimer);
+  const ad=ADS[Math.floor(Math.random()*ADS.length)], f=$('full');
+  $('fullBody').innerHTML = `<small>${tag}</small>` + (failed
+      ? `<div class="big">⟳</div><p>This ad could not be loaded.</p><small>It still counts as watched.</small>`
+      : `<div class="big">${ad[0]}</div><p>${ad[1]}</p>`) +
+    `<p class="adtimer" id="adTimer">${count?`${count} ${secs}`:''}</p><div class="adacts" id="adActs"></div>`;
+  $('fullX').hidden=true;
+  f.classList.remove('closing'); f.hidden=false; void f.offsetWidth; f.classList.add('closing'); // restart the iris
+  let left=secs;
+  adTimer=setInterval(()=>{ left--;
+    if(left>0){ if(count) $('adTimer').textContent=`${count} ${left}`; return; }
+    clearInterval(adTimer); $('adTimer').textContent=''; onEnd();
+  }, 1000);
+}
+function adButtons(buttons){
+  const a=$('adActs'); a.innerHTML='';
+  for(const b of buttons){ const el=document.createElement('button'); el.textContent=b.label;
+    if(b.primary) el.className='primary'; el.onclick=b.onClick; a.appendChild(el); }
+}
+function closeAd(){ clearInterval(adTimer); $('full').hidden=true; $('full').classList.remove('closing'); }
+
 function playAd(stage, purpose){
-  let left=5;
-  const ad=personalizedAd();
-  openModal(`<div class="ad"><div class="tag">Ad ${stage+1} of 2 · selected from your search trace</div><div class="title">${ad[0]}</div><p>${ad[1]}</p></div>
-    <p id="adTimer" style="text-align:center;margin-top:12px">Reward in 5</p>`, []);
-  every(1000, ()=>{ left--;
-    if(left>0) return $('adTimer').textContent=`Reward in ${left}`;
-    clearModalTimers();
-    if(stage===0){ $('adTimer').textContent='Almost there'; setButtons([{label:'Skip ad', onClick:()=>playAd(1, purpose)}]); }
-    else { $('adTimer').textContent='Thanks for watching'; setButtons([{label: purpose==='collect' ? 'Collect your coins' : 'Collect 1 pellet',
-      primary:true, onClick:()=>{
-        closeModal();
-        bump('ad');
-        if(purpose==='collect'){ const f=pendingCollect; pendingCollect=null; if(f) f(); }
-        else { pellets=Math.min(MAX_PELLETS,pellets+1); save(); toast('+1 pellet'); }
-      }}]); }
-  });
+  if(stage===0) closeModal();
+  showAd({tag:`Advertisement · ${stage+1} of 2`, count:'Reward in', onEnd:()=>{
+    if(stage===0) return adButtons([{label:'Skip ad', onClick:()=>playAd(1, purpose)}]);
+    adButtons([{label: purpose==='collect' ? 'Collect your coins' : 'Collect 1 pellet', primary:true, onClick:()=>{
+      closeAd(); bump('ad');
+      if(purpose==='collect'){ const f=pendingCollect; pendingCollect=null; if(f) f(); }
+      else { pellets=Math.min(MAX_PELLETS,pellets+1); save(); updateHud(); renderSheet(); toast('+1 pellet'); }
+    }}]);
+  }});
 }
 
 // free gems arrive at roughly one a day, minus the days you forget. the shop is honest about the wait
@@ -998,29 +982,29 @@ const abMul = () => abGroup==='B' ? 1.15 : 1;        // there is no group A
 function openShop(){
   const one=Math.ceil(gemPrice*abMul()), pack=Math.ceil(one*12), SCALE_RATE=100, scaleBundle=5*SCALE_RATE;
   const items=[
-    {name:'1 casino credit', desc:'The price goes up every time you buy. It is tuned to the games in your search trace.',
+    {name:'1 gem', desc:'The price goes up every time you buy. That’s just how gems work.',
       price:`${fmt(one)} coins`, can:coins>=one, buy:()=>{ coins-=one; gems++; gemPrice=Math.ceil(gemPrice*1.15); }},
-    {name:'Weekend casino bundle, 10 credits', desc:'Best value!* *Slightly worse value. Credits come in tens. Every game wants a different number.',
+    {name:'Gem pack, 10 gems', desc:'Best value!* *Slightly worse value. Gems come in tens. Everything costs threes and fives.',
       price:`${fmt(pack)} coins`, can:coins>=pack, buy:()=>{ coins-=pack; gems+=10; gemPrice=Math.ceil(gemPrice*1.15); }},
     {name:'Convert Koi Scales', desc:`You have ${fmt(scales)}. Scales convert at ${SCALE_RATE}:1, in bundles of five gems only, so you need ${fmt(scaleBundle)}.`,
       price:`${fmt(scaleBundle)} scales`, can:scales>=scaleBundle, buy:()=>{ scales-=scaleBundle; gems+=5; }},
-    {name:'Slingo lucky marker', desc:`Raises your chance of winning by up to 0%. ${eta(3)}`, price:'3 credits',
+    {name:'Lucky pellet', desc:`Raises your chance of winning by up to 0%. ${eta(3)}`, price:'3 gems',
       can:gems>=3, buy:()=>{ spendGems(3); luckyOwned++; }},
-    {name:'Gold Miner bonus chest', desc:`Hatches a hat for a fish you don’t own. ${eta(5)}`, price:'5 credits',
+    {name:'Mystery egg', desc:`Hatches a hat for a fish you don’t own. ${eta(5)}`, price:'5 gems',
       can:gems>=5, buy:()=>{ spendGems(5); hatchEgg(); return 'stay'; }},
     {name:'Duplicate protection', desc: dupProt ? 'Active. You may still receive duplicates.'
       : 'Never open the same hat twice.* *Does not prevent duplicates.', price: dupProt ? 'Owned' : '7 gems',
       can:!dupProt && gems>=7, buy:()=>{ spendGems(7); dupProt=true; }},
-    {name:'Slots refill', desc:`Back to ${MAX_PELLETS} pellets. The reels do not wait.`, price:'5 credits',
+    {name:'Pellet refill', desc:`Back to ${MAX_PELLETS} pellets.`, price:'5 gems',
       can:gems>=5 && pellets<MAX_PELLETS, buy:()=>{ spendGems(5); pellets=MAX_PELLETS; }},
-    {name:'Auto-play trial', desc: turboOwned ? 'Owned. Toggle it on the bet sheet.'
+    {name:'Turbo pond', desc: turboOwned ? 'Owned. Toggle it on the bet sheet.'
       : `Bets place themselves, over and over, until you stop or run out. ${eta(15)}`,
       price: turboOwned ? 'Owned' : '15 gems', can:!turboOwned && gems>=15, buy:()=>{ spendGems(15); turboOwned=true; }},
-    {name:'Heads Up Poker VIP', desc: vip ? 'You’re VIP. Your losses now have gold trim.' : `Gold trim on every loss. That’s the whole benefit. ${eta(20)}`,
+    {name:'Pond Pass VIP', desc: vip ? 'You’re VIP. Your losses now have gold trim.' : `Gold trim on every loss. That’s the whole benefit. ${eta(20)}`,
       price: vip ? 'Owned' : '20 gems', can:!vip && gems>=20, buy:()=>{ spendGems(20); vip=true; }},
   ];
-  openModal(`<h3>Search history shop</h3><p class="fine">You have ${fmt(coins)} coins, ${gems} ${gems===1?'credit':'credits'}${scales?`, ${fmt(scales)} Koi Scales`:''}.
-      The shop has been personalized around your blackjack, casino, slots, slingo, arcade, and poker searches. Pricing experiment group ${abGroup} is higher. This cannot be changed.</p>` +
+  openModal(`<h3>Pond shop</h3><p class="fine">You have ${fmt(coins)} coins, ${gems} ${gems===1?'gem':'gems'}${scales?`, ${fmt(scales)} Koi Scales`:''}.
+      You are in pricing experiment group ${abGroup}. Prices in group ${abGroup} are higher. This cannot be changed.</p>` +
     items.map((it,i)=>`<div class="item"><div><b>${it.name}</b><p>${it.desc}</p></div><button data-i="${i}" ${it.can?'':'disabled'}>${it.price}</button></div>`).join(''),
     [{label:'Odds disclosure', onClick:lootOdds},
      {label:'Close', onClick:closeModal}], 'shop');
@@ -1522,25 +1506,15 @@ function maybeInterstitial(){
   sinceAd=0; save(); interstitial(); return true;
 }
 function interstitial(){
-  const failed=chance(.34), ad=personalizedAd();
-  $('fullBody').innerHTML = failed
-    ? `<small>Advertisement</small><div class="big">⟳</div><p>This ad could not be loaded.</p>
-       <small>It still counts as watched.</small>`
-    : `<small>Advertisement</small><div class="big">${ad[0]}</div><p>${ad[1]}</p>
-       <small>You are seeing this because you played a game.</small>`;
-  $('full').hidden=false; $('fullX').hidden=true;
-  setTimeout(()=>{ const x=$('fullX'); if(x) x.hidden=false; }, reduceMotion ? 1200 : 5000);
+  showAd({failed:chance(.34), secs: reduceMotion ? 1 : 5, onEnd:()=>{ $('fullX').hidden=false; }});
 }
-$('fullX').onclick=()=>{ $('full').hidden=true; bump('ad'); if(turbo && state==='betting') scheduleTurbo(); };
+$('fullX').onclick=()=>{ closeAd(); bump('ad'); if(turbo && state==='betting') scheduleTurbo(); };
 
 // ---- notifications you cannot decline ----
-const PUSHES=['Your slots bonus is waiting. It will not stay waiting.',
-  'The blackjack table opened a seat because you looked before.',
-  'Flaming Crates Slots has a reward with your name on it.',
-  'Slingo is trending among players with your search history.',
-  'Gold Miner has a limited-time bonus chest. You were almost there.',
-  'Heads Up Poker remembers your last hand.',
-  'We noticed you stopped searching. We notice everything.'];
+const PUSHES=['Hana misses you.','Your pellets are full. They will not stay full.',
+  'Kenji_84 has passed you again.','Your offer expires in four minutes.',
+  'You have unclaimed rewards. You do not, but you might.','Someone fed your koi. It was us.',
+  'We noticed you stopped. We notice everything.'];
 function pushNote(text){
   const el=$('push');
   el.innerHTML=`<b>Koi Pond Stakes · now</b>${text}`;
@@ -1723,7 +1697,6 @@ function frame(time){
 const returning = load();
 if(departed){ const i=koi.findIndex(k=>k.name===departed); if(i>=0) koi.splice(i,1); }
 renderSheet(); updateHud(); checkCredit(); tickerLine();
-updateShadowTrace();
 if(turboOwned) turbo=false;
 addEventListener('visibilitychange', ()=>{ if(document.hidden){ stopTurbo(); save(); } });
 addEventListener('pagehide', save);
