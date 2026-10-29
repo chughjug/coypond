@@ -1,12 +1,14 @@
 // The vision meter: Chicago skyline as a 96 x 72 grid of brightness values (0 to 255),
-// regressed on height (brightness = a + b * row). Every coin the purse drops below its
-// starting balance adds random error to every cell. The line stays confident; R squared
-// (how much of the city the line still explains) falls. Losses never heal.
+// regressed on height (brightness = a + b * row). Every point of sight below 100 adds
+// random error (the house's noise) to every cell. Two R squared values come out of it:
+//   house R2: share of what you see that is the house's noise. Rises as you lose sight.
+//   city R2:  share of the city the skyline line still explains. Falls as you lose sight.
+// Sight itself lives in wallet.js; this file only reads it.
 //
-//   Vision.sigma()        -> noise sd for the current low-water mark (0 clear, 150 blind)
+//   Vision.sigma()        -> noise sd for the current sight (100 sight = 0, 0 sight = 150)
 //   Vision.level()        -> 0 to 5, one level per 30 sigma
 //   Vision.note(coins)    -> record a balance (wallet.js calls this on every write)
-//   Vision.mount(canvas, onStats) -> draw the skyline into a canvas; onStats({r2, a, b, sigma, level})
+//   Vision.mount(canvas, onStats) -> draw the skyline; onStats({r2, house, a, b, sigma, level, sight})
 //   Vision.reset()        -> clear vision (for test runs); home.html?fresh resets coins too
 (function(){
   const KEY='arcade.vision.v1', COLS=96, ROWS=72, START=100, MAX_SIGMA=150;
@@ -26,10 +28,10 @@
 
   const Vision = {
     note(coins){ const l=low(); if(l===null || coins<l) setLow(coins); },
+    sight(){ return window.Wallet ? Wallet.get() : (low() ?? START); },
     sigma(){
-      const l=low(); if(l===null) return 0;
-      const lost=Math.max(0, Math.min(START, START-l));
-      return MAX_SIGMA*lost/START;           // 20 coins lost = +30 sigma, 0 coins = blind
+      const lost=Math.max(0, Math.min(START, START-this.sight()));
+      return MAX_SIGMA*lost/START;           // 20 sight lost = +30 sigma, 0 sight = blind
     },
     level(){ return Math.min(5, Math.floor(this.sigma()/30+1e-9)); },
     reset(){ try{ localStorage.removeItem(KEY); }catch(e){} },
@@ -38,9 +40,9 @@
       const ctx=canvas.getContext('2d');
       const grid=document.createElement('canvas'); grid.width=COLS; grid.height=ROWS;
       const gctx=grid.getContext('2d'), img=gctx.createImageData(COLS,ROWS);
-      const noisy=new Float32Array(base.length);
+      const noisy=new Float32Array(base.length), err=new Float32Array(base.length);
       const still=matchMedia('(prefers-reduced-motion: reduce)').matches;
-      let fit={a:0,b:0,r2:0}, last=0, seed=1;
+      let fit={a:0,b:0,r2:0}, house=0, last=0, seed=1;
 
       // seeded gaussian so reduced-motion users get one fixed frame of static
       function rand(){ seed=(seed*16807)%2147483647; return seed/2147483647; }
@@ -56,15 +58,25 @@
         return {a, b, r2:1-ssr/sst};
       }
 
+      // house R2: regress what you see on the house's noise alone. R2 = corr(seen, noise)^2
+      function houseR2(){
+        const n=noisy.length; let sx=0, sy=0, sxx=0, syy=0, sxy=0;
+        for(let i=0;i<n;i++){ const x=err[i], y=noisy[i]; sx+=x; sy+=y; sxx+=x*x; syy+=y*y; sxy+=x*y; }
+        const cov=sxy-sx*sy/n, vx=sxx-sx*sx/n, vy=syy-sy*sy/n;
+        return vx>1e-9 && vy>1e-9 ? cov*cov/(vx*vy) : 0;
+      }
+
       function roll(){
         const s=Vision.sigma();
         for(let i=0;i<base.length;i++){
-          const v=base[i]+(s?gauss()*s:0); noisy[i]=v;
+          const e=s?gauss()*s:0, v=base[i]+e; err[i]=e; noisy[i]=v;
           const c=color(v), j=i*4; img.data[j]=c[0]; img.data[j+1]=c[1]; img.data[j+2]=c[2]; img.data[j+3]=255;
         }
         gctx.putImageData(img,0,0);
-        fit=regress();
-        onStats && onStats({...fit, sigma:s, level:Vision.level()});
+        fit=regress(); house=houseR2();
+        // the more of the picture is noise, the softer the city gets
+        canvas.style.filter = house>.01 ? `blur(${(house*house*4).toFixed(2)}px)` : '';
+        onStats && onStats({...fit, house, sigma:s, level:Vision.level(), sight:Vision.sight()});
       }
 
       function paint(){

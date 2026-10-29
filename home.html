@@ -47,6 +47,9 @@
   .hud > div { background:rgba(10,16,34,.55); padding:8px 12px; border-radius:14px; }
   .meter { margin:6px 0 0; text-align:right; font-size:13px; }
   .meter b { font-size:20px; font-weight:600; font-variant-numeric:tabular-nums; margin-left:4px; }
+  .meter small { display:block; font-size:12px; opacity:.85; margin-top:2px; }
+  .explain { max-width:230px; margin:6px 0 0 auto; font-size:12px; line-height:1.35; text-align:left; opacity:.9; }
+  @media (max-width:520px){ .explain { display:none; } }
   .pips { display:flex; gap:4px; justify-content:flex-end; margin-top:5px; }
   .pips i { width:14px; height:6px; border-radius:3px; background:rgba(246,239,224,.85); box-shadow:0 1px 2px rgba(0,0,0,.4); }
   .pips i.lost { background:rgba(246,239,224,.18); }
@@ -131,8 +134,9 @@
   </div>
   <div>
     <p class="title">The Arcade</p>
-    <p class="meter" id="meter" title="Brightness of each skyline cell regressed on its height">Vision R²<b id="r2">0.59</b></p>
+    <p class="meter" id="meter">House R²<b id="r2">0.00</b><small id="city">City R² 0.59</small></p>
     <div class="pips" id="pips" role="img" aria-label="Vision remaining"><i></i><i></i><i></i><i></i><i></i></div>
+    <p class="explain" id="explain">Every point of sight you lose adds the house's noise to the city behind you. House R² is how much of what you see is that noise.</p>
   </div>
 </header>
 
@@ -329,7 +333,7 @@ addEventListener('blur', ()=>keys.clear());
 addEventListener('resize', ()=>{ layout(); if(me.tx===null && shown) standAt(shown); });
 
 // ---- sight: the one currency every game uses (see wallet.js) ----
-function showCoins(n){ $('coins').textContent=fmt(n); Wallet.see(n); }
+function showCoins(n){ $('coins').textContent=fmt(n); Wallet.see(n); window.skyMeter && skyMeter.refresh(); }
 showCoins(Wallet.get());
 Wallet.onChange(showCoins);
 // coming back from a game with the back button can restore this page from cache
@@ -340,16 +344,21 @@ addEventListener('pageshow', ()=>showCoins(Wallet.get()));
 if(new URLSearchParams(location.search).has('fresh')){ Wallet.set(Wallet.START); Vision.reset(); history.replaceState(null,'',location.pathname); }
 const HINT=$('hint').textContent;
 let r2s=null; // smoothed, so the readout doesn't flicker with the static
-Vision.mount($('sky'), st=>{
-  r2s = r2s===null || Math.abs(st.r2-r2s)>.05 ? st.r2 : r2s*.85+st.r2*.15;
+window.skyMeter = Vision.mount($('sky'), st=>{
+  r2s = r2s===null || Math.abs(st.house-r2s)>.05 ? st.house : r2s*.85+st.house*.15;
   $('r2').textContent=r2s.toFixed(2);
+  $('city').textContent=`City R² ${st.r2.toFixed(2)}`;
+  const lost=Math.max(0, 100-Math.round(st.sight));
+  $('explain').textContent = lost
+    ? `You've lost ${lost} sight. The house's noise now explains ${Math.round(r2s*100)}% of what you see; the skyline line explains ${Math.round(st.r2*100)}% of the city.`
+    : `Every point of sight you lose adds the house's noise to the city behind you. House R² is how much of what you see is that noise.`;
   const left=5-st.level;
   [...$('pips').children].forEach((el,i)=>el.classList.toggle('lost', i>=left));
   $('pips').setAttribute('aria-label', `Vision remaining: ${left} of 5`);
   const end=st.level>=5;
   $('hint').classList.toggle('end', end);
   $('hint').textContent = end
-    ? `The model explains ${Math.round(r2s*100)}% of the city. The house explains the rest.`
+    ? `The model explains ${Math.round(st.r2*100)}% of the city. The house explains the rest.`
     : HINT;
 });
 
