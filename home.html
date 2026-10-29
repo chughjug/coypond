@@ -35,12 +35,23 @@
       radial-gradient(circle at 15% 20%, rgba(255,255,255,.08) 0 40px, transparent 41px),
       radial-gradient(circle at 85% 75%, rgba(255,255,255,.06) 0 60px, transparent 61px),
       radial-gradient(ellipse at 50% 50%, var(--grass) 0%, var(--grass-deep) 100%); }
+  /* Chicago skyline vision meter (vision.js) is the ground everything stands on */
+  .sky { position:absolute; inset:0; width:100%; height:100%; display:block; pointer-events:none; }
+  .paths { opacity:.82; }
+  .hud, .hint { color:#f6efe0; text-shadow:0 1px 3px rgba(0,0,0,.65); --caption:rgba(246,239,224,.82); }
+  .meter { margin:6px 0 0; text-align:right; font-size:13px; }
+  .meter b { font-size:20px; font-weight:600; font-variant-numeric:tabular-nums; margin-left:4px; }
+  .pips { display:flex; gap:4px; justify-content:flex-end; margin-top:5px; }
+  .pips i { width:14px; height:6px; border-radius:3px; background:rgba(246,239,224,.85); box-shadow:0 1px 2px rgba(0,0,0,.4); }
+  .pips i.lost { background:rgba(246,239,224,.18); }
+  .hud > div { background:rgba(10,16,34,.55); padding:8px 12px; border-radius:14px; }
+  .hint.blind { font-style:normal; font-size:16px; font-weight:600; width:fit-content; max-width:calc(100vw - 64px);
+    margin:0 auto; padding:10px 16px; border-radius:14px; background:rgba(10,16,34,.8); }
   .paths { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
   .paths path { fill:none; stroke-linecap:round; stroke-linejoin:round; }
 
   .hud { position:fixed; top:max(12px,env(safe-area-inset-top)); left:18px; right:18px; z-index:5;
     display:flex; justify-content:space-between; align-items:flex-start; pointer-events:none; }
-  .hud, .hint { text-shadow:0 0 calc(var(--loss,0)*8px) var(--sheet), 0 0 calc(var(--loss,0)*3px) var(--sheet); }
   .purse b { font-size:28px; font-weight:600; font-variant-numeric:tabular-nums; }
   .purse .unit { font-size:16px; margin-left:6px; }
   .purse p { margin:2px 0 0; font-size:13px; color:var(--caption); }
@@ -78,11 +89,6 @@
   .panel .primary { background:var(--accent); color:var(--accent-ink); border-color:transparent; font-weight:600; }
   .panel .primary[aria-disabled="true"] { opacity:.45; pointer-events:none; }
 
-  /* your sight, from wallet.js: the grounds blur and the edges darken as it runs out */
-  .world { filter:blur(var(--blur,0px)); transition:filter .8s ease; }
-  .blind { position:fixed; inset:0; z-index:4; pointer-events:none;
-    background:radial-gradient(ellipse at 50% 45%, transparent calc(78% - var(--loss,0)*70%),
-      rgba(5,12,11,calc(.3 + var(--loss,0)*.6)) calc(100% - var(--loss,0)*55%)); }
   .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
   @media (prefers-reduced-motion: reduce) { .panel { transition:none; } .walker.step { animation:none; } }
 </style>
@@ -90,13 +96,18 @@
 <body>
 <header class="hud">
   <div class="purse">
-    <b id="coins">100</b><span class="unit">sight</span>
-    <p>Every game here is played for your sight.</p>
+    <b id="coins">100</b><span class="unit">coins</span>
+    <p>One purse, every game.</p>
   </div>
-  <p class="title">The Arcade</p>
+  <div>
+    <p class="title">The Arcade</p>
+    <p class="meter" id="meter" title="Brightness of each cell regressed on its height in the skyline">Vision R²<b id="r2">0.59</b></p>
+    <div class="pips" id="pips" role="img" aria-label="Vision remaining"><i></i><i></i><i></i><i></i><i></i></div>
+  </div>
 </header>
 
 <main class="world" id="world" aria-label="Arcade grounds">
+  <canvas class="sky" id="sky" aria-hidden="true"></canvas>
   <svg class="paths" id="paths" aria-hidden="true"></svg>
 
   <a class="station" id="st-coypond" href="coypond.html" data-id="coypond">
@@ -136,8 +147,6 @@
   <div class="walker" id="walker" aria-hidden="true"></div>
 </main>
 
-<div class="blind" aria-hidden="true"></div>
-
 <p class="hint" id="hint">Tap a game to play, or tap anywhere to walk around.</p>
 
 <section class="panel" id="panel" aria-live="polite">
@@ -147,6 +156,7 @@
 </section>
 
 <script src="wallet.js"></script>
+<script src="vision.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -155,9 +165,9 @@ const fmt = n => Math.floor(n).toLocaleString('en-US');
 // Add a game: give it its own .html file, a station in the markup, and an entry here.
 const GAMES = [
   { id:'game-2', file:'game-2.html', name:'Mystery booth', ready:false,
-    desc:'Something is being built behind the tape. It will take your sight too.' },
+    desc:'Something is being built behind the tape. Your coins will work here too.' },
   { id:'coypond', file:'coypond.html', name:'Koi Pond Stakes', ready:true,
-    desc:'Bet your sight on which koi eats the pellet first. Whatever you win or lose comes back here with you.' },
+    desc:'Bet on which koi eats the pellet first. Coins you win come back to the arcade with you.' },
   { id:'game-3', file:'game-3.html', name:'Locked tent', ready:false,
     desc:'The flap is tied shut. A sign says “soon,” and has said so for a while.' },
 ];
@@ -279,12 +289,30 @@ addEventListener('keyup', e=>keys.delete(e.key.length===1 ? e.key.toLowerCase() 
 addEventListener('blur', ()=>keys.clear());
 addEventListener('resize', ()=>{ layout(); if(me.tx===null && shown) standAt(shown); });
 
-// ---- sight: the one currency every game uses (see wallet.js) ----
-function showCoins(n){ $('coins').textContent=fmt(n); Wallet.see(n); }
+// ---- purse ----
+function showCoins(n){ $('coins').textContent=fmt(n); }
 showCoins(Wallet.get());
 Wallet.onChange(showCoins);
 // coming back from a game with the back button can restore this page from cache
 addEventListener('pageshow', ()=>showCoins(Wallet.get()));
+
+// ---- vision meter ----
+// home.html?fresh wipes the purse and the noise, for test runs and critique
+if(new URLSearchParams(location.search).has('fresh')){ Wallet.set(Wallet.START); Vision.reset(); history.replaceState(null,'',location.pathname); }
+const HINT=$('hint').textContent;
+let r2s=null; // smoothed, so the readout doesn't flicker with the static
+Vision.mount($('sky'), st=>{
+  r2s = r2s===null || Math.abs(st.r2-r2s)>.05 ? st.r2 : r2s*.85+st.r2*.15;
+  $('r2').textContent=r2s.toFixed(2);
+  const left=5-st.level;
+  [...$('pips').children].forEach((el,i)=>el.classList.toggle('lost', i>=left));
+  $('pips').setAttribute('aria-label', `Vision remaining: ${left} of 5`);
+  const blind=st.level>=5;
+  $('hint').classList.toggle('blind', blind);
+  $('hint').textContent = blind
+    ? `The model explains ${Math.round(r2s*100)}% of the city. The house explains the rest.`
+    : HINT;
+});
 
 // ---- boot ----
 layout();
