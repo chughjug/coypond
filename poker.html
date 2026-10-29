@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Poker Table</title>
+<style>
+  :root {
+    --bg:#7fa65e; --ink:#173430; --caption:rgba(23,52,48,.75);
+    --sheet:#f3efe2; --line:rgba(23,52,48,.18);
+    --accent:#c9461a; --accent-ink:#fff;
+    --felt:#2f7a52; --felt-deep:#1f5a3b; --felt-line:rgba(255,255,255,.22);
+    --rail:#8a5a34; --rail-dark:#6b4426;
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#22371d; --ink:#e6efe9; --caption:rgba(230,239,233,.7);
+      --sheet:#1b2a22; --line:rgba(230,239,233,.16);
+      --accent:#e8692c; --accent-ink:#1a0d06;
+      --felt:#1f5a3b; --felt-deep:#123824; --felt-line:rgba(255,255,255,.16);
+      --rail:#6b4426; --rail-dark:#4a2e19;
+      color-scheme:dark;
+    }
+  }
+  html, body { margin:0; min-height:100%; background:var(--bg); color:var(--ink);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif; -webkit-tap-highlight-color:transparent; }
+  body { min-height:100vh; display:flex; flex-direction:column; align-items:center; gap:18px;
+    padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom)); box-sizing:border-box; }
+  button, a { font:inherit; color:inherit; }
+  button:focus-visible, a:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+
+  .hud { width:min(640px,100%); display:flex; justify-content:space-between; align-items:flex-start; }
+  .hud b { font-size:28px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .hud .unit { font-size:16px; margin-left:6px; }
+  .hud p { margin:2px 0 0; font-size:13px; color:var(--caption); }
+  .hud a { font-size:15px; font-style:italic; color:var(--caption); }
+
+  /* ---- table ---- */
+  .table { position:relative; width:min(640px,100%); aspect-ratio:1.7; border-radius:999px; box-sizing:border-box;
+    padding:clamp(10px,2.4vw,16px); background:linear-gradient(var(--rail), var(--rail-dark));
+    box-shadow:0 14px 30px rgba(0,0,0,.28); }
+  .felt { position:relative; width:100%; height:100%; border-radius:999px;
+    background:radial-gradient(ellipse at 50% 40%, var(--felt) 0%, var(--felt-deep) 100%);
+    box-shadow:inset 0 0 0 2px var(--felt-line), inset 0 6px 18px rgba(0,0,0,.35); }
+  .spot { position:absolute; left:50%; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .spot .label { font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:rgba(255,255,255,.75); white-space:nowrap; }
+  .spot .amt { font-size:15px; font-weight:600; color:#fff; font-variant-numeric:tabular-nums; }
+  .pot { top:42%; }
+  .bet { top:80%; }
+  .ring { position:absolute; left:50%; top:80%; width:clamp(90px,24%,150px); aspect-ratio:2.2; transform:translate(-50%,-78%);
+    border:1.5px dashed var(--felt-line); border-radius:999px; pointer-events:none; }
+
+  /* stacks: one column per pile, chips sit 4px apart */
+  .stacks { display:flex; align-items:flex-end; justify-content:center; gap:4px; min-height:var(--chip); }
+  .pile { position:relative; width:var(--chip); }
+
+  /* ---- chips ---- */
+  :root { --chip:clamp(30px,7vw,40px); }
+  .chip { --c:#f4f1ea; --edge:#2f5fa8; --text:#173430;
+    position:relative; width:var(--chip); height:var(--chip); border-radius:50%; box-sizing:border-box;
+    display:grid; place-items:center;
+    background:
+      radial-gradient(circle, var(--c) 0 52%, var(--edge) 53% 58%, transparent 59%),
+      repeating-conic-gradient(var(--c) 0 15deg, var(--edge) 15deg 45deg);
+    box-shadow:0 0 0 1.5px rgba(0,0,0,.28), 0 2px 0 rgba(0,0,0,.35);
+    font-size:calc(var(--chip) * .34); font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; }
+  .chip[data-v="5"]  { --c:#c9352b; --edge:#f4f1ea; --text:#fff; }
+  .chip[data-v="10"] { --c:#2f5fa8; --edge:#f4f1ea; --text:#fff; }
+  .pile .chip { position:absolute; left:0; }
+  .flier { position:fixed; z-index:20; margin:0; pointer-events:none; will-change:transform; }
+
+  /* ---- rack ---- */
+  .rack { width:min(640px,100%); padding:14px 16px 16px; box-sizing:border-box; border-radius:18px; background:var(--sheet);
+    box-shadow:0 10px 30px rgba(0,0,0,.2); }
+  .rack h2 { margin:0 0 2px; font-size:18px; }
+  .rack > p { margin:0 0 12px; font-size:14px; color:var(--caption); min-height:1.3em; }
+  .denoms { display:flex; justify-content:center; gap:clamp(14px,6vw,32px); margin-bottom:14px; }
+  .denoms button { display:flex; flex-direction:column; align-items:center; gap:6px; padding:4px; border:0; background:none; cursor:pointer;
+    border-radius:12px; --chip:clamp(48px,13vw,60px); }
+  .denoms button span { font-size:13px; color:var(--caption); white-space:nowrap; }
+  .denoms button:active .chip { translate:0 2px; }
+  .denoms button:disabled { opacity:.4; cursor:not-allowed; }
+  .acts { display:flex; gap:8px; }
+  .acts button { flex:1; padding:12px; border-radius:12px; font-size:16px; border:1.5px solid var(--line); background:transparent; cursor:pointer; }
+  .acts .primary { background:var(--accent); color:var(--accent-ink); border-color:transparent; font-weight:600; }
+  .acts button:disabled { opacity:.45; cursor:not-allowed; }
+</style>
+</head>
+<body>
+<header class="hud">
+  <div>
+    <b id="stack">100</b><span class="unit">vision points</span>
+    <p>Your stack</p>
+  </div>
+  <a href="home.html">Back to the arcade</a>
+</header>
+
+<div class="table" aria-label="Poker table">
+  <div class="felt" id="felt">
+    <div class="spot pot">
+      <span class="label">Pot</span>
+      <div class="stacks" id="pot"></div>
+      <span class="amt" id="potAmt">0 VP</span>
+    </div>
+    <div class="ring" aria-hidden="true"></div>
+    <div class="spot bet">
+      <div class="stacks" id="bet"></div>
+      <span class="label">Your bet · <span id="betAmt">0</span> VP</span>
+    </div>
+  </div>
+</div>
+
+<section class="rack" aria-label="Your chips">
+  <h2>Pick your chips</h2>
+  <p id="msg" aria-live="polite">Tap a chip to add it to your bet.</p>
+  <div class="denoms" id="denoms">
+    <button data-v="1"  aria-label="Add a 1 vision point chip"><div class="chip" data-v="1">1</div><span>1 VP</span></button>
+    <button data-v="5"  aria-label="Add a 5 vision point chip"><div class="chip" data-v="5">5</div><span>5 VP</span></button>
+    <button data-v="10" aria-label="Add a 10 vision point chip"><div class="chip" data-v="10">10</div><span>10 VP</span></button>
+  </div>
+  <div class="acts">
+    <button id="clear">Take back</button>
+    <button id="place" class="primary">Bet</button>
+    <button id="reset">New hand</button>
+  </div>
+</section>
+
+<script>
+const $ = id => document.getElementById(id);
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const START=100, DENOMS=[10,5,1], PILE=10, STEP=4; // PILE: chips per column before a new one starts
+
+let stack=START, nextId=1, busy=false;
+const bet=[], pot=[]; // chips: {id, v}
+const sum = list => list.reduce((s,c)=>s+c.v, 0);
+
+// Draw a list of chips as piles grouped by value, tallest values first.
+function renderStacks(el, list){
+  el.innerHTML='';
+  for(const v of DENOMS){
+    const chips=list.filter(c=>c.v===v);
+    for(let i=0; i<chips.length; i+=PILE){
+      const col=chips.slice(i, i+PILE), pile=document.createElement('div');
+      pile.className='pile';
+      pile.style.height=`calc(var(--chip) + ${(col.length-1)*STEP}px)`;
+      col.forEach((c,j)=>{
+        const d=document.createElement('div');
+        d.className='chip'; d.dataset.v=c.v; d.dataset.id=c.id; d.textContent=c.v;
+        d.style.bottom=j*STEP+'px'; d.style.zIndex=j;
+        pile.appendChild(d);
+      });
+      el.appendChild(pile);
+    }
+  }
+}
+
+function render(){
+  renderStacks($('bet'), bet);
+  renderStacks($('pot'), pot);
+  $('stack').textContent=stack.toLocaleString('en-US');
+  $('betAmt').textContent=sum(bet);
+  $('potAmt').textContent=sum(pot)+' VP';
+  document.querySelectorAll('#denoms button').forEach(b=>b.disabled = busy || +b.dataset.v>stack);
+  $('place').disabled = busy || !bet.length;
+  $('clear').disabled = busy || !bet.length;
+  $('reset').disabled = busy;
+}
+
+const chipEl = id => document.querySelector(`.chip[data-id="${id}"]`);
+
+// Fly a copy of a chip from one screen rect to wherever its real element now sits.
+// The real chip stays hidden until the copy lands on it.
+function fly(from, target, {delay=0, lift=60, duration=520, hide=true}={}){
+  const to=target.getBoundingClientRect();
+  if(reduceMotion) return Promise.resolve();
+  if(hide) target.style.visibility='hidden';
+  const f=target.cloneNode(true);
+  f.classList.add('flier');
+  Object.assign(f.style, {left:to.left+'px', top:to.top+'px', bottom:'auto', visibility:'visible',
+    width:to.width+'px', height:to.height+'px', fontSize:to.width*.34+'px'});
+  document.body.appendChild(f);
+  const dx=from.left+from.width/2-(to.left+to.width/2), dy=from.top+from.height/2-(to.top+to.height/2);
+  const s=from.width/to.width;
+  const a=f.animate([
+    {transform:`translate(${dx}px,${dy}px) scale(${s})`, boxShadow:'0 0 0 1.5px rgba(0,0,0,.28), 0 2px 0 rgba(0,0,0,.35)'},
+    {transform:`translate(${dx/2}px,${dy/2-lift}px) scale(${(s+1)/2*1.15}) rotate(180deg)`,
+      boxShadow:'0 0 0 1.5px rgba(0,0,0,.28), 0 18px 14px rgba(0,0,0,.3)', offset:.5},
+    {transform:'translate(0,0) scale(1) rotate(360deg)', boxShadow:'0 0 0 1.5px rgba(0,0,0,.28), 0 2px 0 rgba(0,0,0,.35)'},
+  ], {duration, delay, easing:'cubic-bezier(.45,.05,.35,1)', fill:'backwards'});
+  return a.finished.then(()=>{ f.remove(); if(hide) target.style.visibility=''; });
+}
+
+// Snapshot where each chip is right now, so it can fly from there after a re-render.
+const rects = list => new Map(list.map(c=>[c.id, chipEl(c.id).getBoundingClientRect()]));
+
+// ---- add a chip to your bet ----
+$('denoms').addEventListener('click', e=>{
+  const b=e.target.closest('button');
+  if(!b || b.disabled) return;
+  const v=+b.dataset.v, from=b.querySelector('.chip').getBoundingClientRect();
+  stack-=v;
+  const c={id:nextId++, v};
+  bet.push(c);
+  render();
+  fly(from, chipEl(c.id), {lift:40, duration:380});
+  $('msg').textContent=`Your bet is ${sum(bet)} VP. Press Bet to push it into the pot.`;
+});
+
+// ---- push the bet into the pot ----
+$('place').onclick=async ()=>{
+  if(!bet.length) return;
+  const amount=sum(bet), from=rects(bet), moved=bet.splice(0);
+  pot.push(...moved);
+  busy=true; render();
+  $('msg').textContent=`You bet ${amount} VP.`;
+  await Promise.all(moved.map((c,i)=>fly(from.get(c.id), chipEl(c.id), {delay:i*60, lift:70, duration:620})));
+  busy=false; render();
+  $('msg').textContent=`You bet ${amount} VP. The pot is ${sum(pot)} VP.`;
+};
+
+// ---- take the bet back to the rack ----
+$('clear').onclick=async ()=>{
+  if(!bet.length) return;
+  const from=rects(bet), back=bet.splice(0);
+  busy=true; render();
+  await Promise.all(back.map((c,i)=>{
+    const home=document.querySelector(`#denoms .chip[data-v="${c.v}"]`);
+    return fly(from.get(c.id), home, {delay:i*40, lift:40, duration:380, hide:false});
+  }));
+  stack+=sum(back);
+  busy=false; render();
+  $('msg').textContent='Bet taken back. Tap a chip to start again.';
+};
+
+// ---- clear the table ----
+$('reset').onclick=()=>{
+  stack=START; bet.length=0; pot.length=0;
+  render();
+  $('msg').textContent=`New hand. You have ${START} VP.`;
+};
+
+render();
+</script>
+</body>
+</html>
