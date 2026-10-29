@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mystery booth · Coming soon</title>
+<style>
+  :root { --bg:#9cbf7a; --ink:#173430; --caption:rgba(23,52,48,.75); --sheet:#f3efe2; --accent:#c9461a; --accent-ink:#fff; --hazard:#f2c230; color-scheme:light; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#22371d; --ink:#e6efe9; --caption:rgba(230,239,233,.7); --sheet:#1b2a22; --accent:#e8692c; --accent-ink:#1a0d06; --hazard:#c99d1e; color-scheme:dark; }
+  }
+  html, body { margin:0; min-height:100%; background:var(--bg); color:var(--ink);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif; }
+  body { display:grid; place-items:center; min-height:100vh; padding:24px; box-sizing:border-box; }
+  .card { width:min(420px,100%); background:var(--sheet); border-radius:18px; padding:24px; text-align:center;
+    box-shadow:0 10px 30px rgba(0,0,0,.2); }
+  .tape { height:14px; margin:0 -24px 20px; background:repeating-linear-gradient(-45deg, var(--hazard) 0 14px, #222 14px 28px); }
+  h1 { margin:0 0 6px; font-size:26px; }
+  p { margin:0 0 16px; color:var(--caption); }
+  .purse { font-variant-numeric:tabular-nums; }
+  a { display:block; padding:12px; border-radius:12px; background:var(--accent); color:var(--accent-ink); text-decoration:none; font-weight:600; }
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="tape" aria-hidden="true"></div>
+  <h1>Mystery booth</h1>
+  <p>Something is being built behind the tape. Coming soon.</p>
+  <p class="purse">Your arcade purse: <b id="coins">…</b> coins</p>
+  <a href="../index.html">Back to the arcade</a>
+</main>
+<script src="../shared/wallet.js"></script>
+<script>
+// When this game is built: read coins with Wallet.get(), and write them back with
+// Wallet.set(n) / Wallet.add(n) / Wallet.spend(n). See shared/wallet.js.
+document.getElementById('coins').textContent = Wallet.get().toLocaleString('en-US');
+</script>
+</body>
+</html>
