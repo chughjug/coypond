@@ -40,6 +40,7 @@
 
   .hud { position:fixed; top:max(12px,env(safe-area-inset-top)); left:18px; right:18px; z-index:5;
     display:flex; justify-content:space-between; align-items:flex-start; pointer-events:none; }
+  .hud, .hint { text-shadow:0 0 calc(var(--loss,0)*8px) var(--sheet), 0 0 calc(var(--loss,0)*3px) var(--sheet); }
   .purse b { font-size:28px; font-weight:600; font-variant-numeric:tabular-nums; }
   .purse .unit { font-size:16px; margin-left:6px; }
   .purse p { margin:2px 0 0; font-size:13px; color:var(--caption); }
@@ -77,6 +78,11 @@
   .panel .primary { background:var(--accent); color:var(--accent-ink); border-color:transparent; font-weight:600; }
   .panel .primary[aria-disabled="true"] { opacity:.45; pointer-events:none; }
 
+  /* your sight, from wallet.js: the grounds blur and the edges darken as it runs out */
+  .world { filter:blur(var(--blur,0px)); transition:filter .8s ease; }
+  .blind { position:fixed; inset:0; z-index:4; pointer-events:none;
+    background:radial-gradient(ellipse at 50% 45%, transparent calc(78% - var(--loss,0)*70%),
+      rgba(5,12,11,calc(.3 + var(--loss,0)*.6)) calc(100% - var(--loss,0)*55%)); }
   .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
   @media (prefers-reduced-motion: reduce) { .panel { transition:none; } .walker.step { animation:none; } }
 </style>
@@ -84,8 +90,8 @@
 <body>
 <header class="hud">
   <div class="purse">
-    <b id="coins">100</b><span class="unit">coins</span>
-    <p>One purse, every game.</p>
+    <b id="coins">100</b><span class="unit">sight</span>
+    <p>Every game here is played for your sight.</p>
   </div>
   <p class="title">The Arcade</p>
 </header>
@@ -130,6 +136,8 @@
   <div class="walker" id="walker" aria-hidden="true"></div>
 </main>
 
+<div class="blind" aria-hidden="true"></div>
+
 <p class="hint" id="hint">Tap a game to play, or tap anywhere to walk around.</p>
 
 <section class="panel" id="panel" aria-live="polite">
@@ -147,9 +155,9 @@ const fmt = n => Math.floor(n).toLocaleString('en-US');
 // Add a game: give it its own .html file, a station in the markup, and an entry here.
 const GAMES = [
   { id:'game-2', file:'game-2.html', name:'Mystery booth', ready:false,
-    desc:'Something is being built behind the tape. Your coins will work here too.' },
+    desc:'Something is being built behind the tape. It will take your sight too.' },
   { id:'coypond', file:'coypond.html', name:'Koi Pond Stakes', ready:true,
-    desc:'Bet on which koi eats the pellet first. Coins you win come back to the arcade with you.' },
+    desc:'Bet your sight on which koi eats the pellet first. Whatever you win or lose comes back here with you.' },
   { id:'game-3', file:'game-3.html', name:'Locked tent', ready:false,
     desc:'The flap is tied shut. A sign says “soon,” and has said so for a while.' },
 ];
@@ -271,8 +279,8 @@ addEventListener('keyup', e=>keys.delete(e.key.length===1 ? e.key.toLowerCase() 
 addEventListener('blur', ()=>keys.clear());
 addEventListener('resize', ()=>{ layout(); if(me.tx===null && shown) standAt(shown); });
 
-// ---- purse ----
-function showCoins(n){ $('coins').textContent=fmt(n); }
+// ---- sight: the one currency every game uses (see wallet.js) ----
+function showCoins(n){ $('coins').textContent=fmt(n); Wallet.see(n); }
 showCoins(Wallet.get());
 Wallet.onChange(showCoins);
 // coming back from a game with the back button can restore this page from cache

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Koi pond stakes</title>
+<title>Koi Pond Stakes · bet your sight</title>
 <style>
   :root {
     --water: #7fb3a3; --water-deep: #4f8a7c;
@@ -28,12 +28,21 @@
   html, body { margin:0; height:100%; overflow:hidden; background:var(--water-deep); color:var(--ink);
     font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif; -webkit-tap-highlight-color:transparent; }
   canvas { display:block; width:100vw; height:100vh; touch-action:none; }
+  /* the bet is your sight: as it runs out the pond blurs, and the dark closes in from the edges.
+     --loss and --blur come from wallet.js. The HUD and bet sheet sit above this, so you can always keep betting. */
+  #pond { filter:blur(var(--blur,0px)); transition:filter .8s ease; }
+  .blind { position:fixed; inset:0; pointer-events:none; transition:background .8s ease;
+    background:radial-gradient(ellipse at 50% 42%, transparent calc(78% - var(--loss,0)*70%),
+      rgba(5,12,11,calc(.35 + var(--loss,0)*.6)) calc(100% - var(--loss,0)*55%)); }
   button { font:inherit; color:inherit; cursor:pointer; }
   button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 
   .hud { position:fixed; top:max(12px,env(safe-area-inset-top)); left:18px; right:18px;
     display:flex; justify-content:space-between; align-items:flex-start; pointer-events:none; }
   .purse { max-width:70%; min-width:0; }
+  /* keep the balance readable however dark the pond gets */
+  .hud .more { background:color-mix(in srgb, var(--sheet) calc(var(--loss,0)*90%), transparent); }
+  .hud, .caption { text-shadow:0 0 calc(var(--loss,0)*8px) var(--sheet), 0 0 calc(var(--loss,0)*3px) var(--sheet); }
   .purse .money { display:flex; align-items:baseline; gap:6px; }
   .purse b { font-size:28px; font-weight:600; font-variant-numeric:tabular-nums; }
   .purse .unit { font-size:16px; }
@@ -259,9 +268,10 @@
 </head>
 <body>
 <canvas id="pond" aria-label="Koi pond"></canvas>
+<div class="blind" aria-hidden="true"></div>
 <header class="hud">
   <div class="purse">
-    <div class="money"><b id="coins">100</b><span class="unit">coins</span><button class="addcoins" id="addCoins" aria-label="Buy coins">+</button></div>
+    <div class="money"><b id="coins">100</b><span class="unit">sight</span><button class="addcoins" id="addCoins" aria-label="Buy sight">+</button></div>
     <div class="chips" id="chips"></div>
   </div>
   <div class="hudright">
@@ -345,10 +355,10 @@ let consent=false, agreed=false, sound=true, oddsFmt='frac', abGroup='B';
 let referrals=0, declines=7, audio=null, pushTimer=null;
 const money = n => '$'+n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 const PACKS=[
-  {name:'Pouch of coins', coins:500, price:0.99, note:'A little treat.'},
-  {name:'Bucket of coins', coins:2000, price:4.99, badge:'Most popular', note:'Chosen by people who also chose this.'},
-  {name:'Pond of coins', coins:12000, price:49.99, badge:'Best value', note:'Only 4.1¢ per coin, which sounds small.'},
-  {name:'Ocean of coins', coins:100000, price:999.99, badge:'For whales', note:'First purchase bonus: double coins! (This pack only.)', hot:true},
+  {name:'Pouch of sight', coins:500, price:0.99, note:'A little treat.'},
+  {name:'Bucket of sight', coins:2000, price:4.99, badge:'Most popular', note:'Chosen by people who also chose this.'},
+  {name:'Pond of sight', coins:12000, price:49.99, badge:'Best value', note:'Only 4.1¢ per point of sight, which sounds small.'},
+  {name:'Ocean of sight', coins:100000, price:999.99, badge:'For whales', note:'First purchase bonus: double sight! (This pack only.)', hot:true},
 ];
 const AMOUNTS=[10,25,50,'All in'];
 
@@ -363,7 +373,7 @@ function save(){
     sound, oddsFmt, abGroup, referrals, declines, sinceAd, lastSeen:Date.now() })); } catch(e){}
 }
 function load(){
-  coins=Wallet.get(); // the arcade purse is the source of truth for coins
+  coins=Wallet.get(); // the arcade wallet is the source of truth for sight
   let d; try { d=JSON.parse(localStorage.getItem(SAVE)||'null'); } catch(e){}
   if(!d) return false;
   const num=(v,f)=>typeof v==='number' && isFinite(v) ? v : f;
@@ -573,7 +583,7 @@ const betCost   = () => Math.round(mode==='pond' ? pondTotal(stake) : stake*(boo
 function renderSheet(){
   const modeName = mode==='parlay' ? `Parlay, ${legs} legs` : mode==='pond' ? 'Feed the pond' : 'Single';
   $('sheetTitle').textContent = folded
-    ? [modeName, pick && pick.name, `${fmt(stake)} coins`].filter(Boolean).join(' · ')
+    ? [modeName, pick && pick.name, `${fmt(stake)} sight`].filter(Boolean).join(' · ')
     : mode==='parlay' ? 'How many races in a row?'
     : mode==='pond' ? 'Feed the whole pond. Every koi is backed, so somebody always wins'
     : 'Which koi eats the pellet first?';
@@ -626,18 +636,18 @@ function renderSheet(){
   }
 
   const go=$('go');
-  if(coins<=0){ go.disabled=false; go.textContent='Out of coins. Tap to get more'; syncToast(); return; }
+  if(coins<=0){ go.disabled=false; go.textContent='Out of sight. Tap to get more'; syncToast(); return; }
   const cost=betCost();
   if(mode==='pond'){
     go.disabled = cost>coins;
-    go.textContent = cost>coins ? `Feed the pond needs ${fmt(cost)} coins`
+    go.textContent = cost>coins ? `Feed the pond needs ${fmt(cost)} sight`
       : `Stake ${stake} on each of ${koi.length} koi (${fmt(cost)}) — guaranteed win of ${fmt(pondBack(stake))}`;
     syncToast(); return;
   }
   go.disabled = !pick || stake<=0 || cost>coins || pick.resting;
   go.textContent = !pick ? 'Pick a koi'
     : pick.resting ? `${pick.name} is resting`
-    : cost>coins ? `Boosted odds need ${fmt(cost)} coins`
+    : cost>coins ? `Boosted odds need ${fmt(cost)} sight`
     : mode==='parlay' ? `Bet ${stake}: ${pick.name} wins ${legs} in a row to win ${fmt(parlayPay(pick,legs,stake))}`
     : `Bet ${fmt(cost)} on ${pick.name} to win ${fmt(Math.round(stake*pick.odds*boostMult()))}`;
   syncToast();
@@ -668,6 +678,7 @@ $('go').onclick=()=>{
 const chip = (label, tab, cls='') => `<button class="chip ${cls}" data-tab="${tab}">${label}</button>`;
 function updateHud(){
   $('coins').textContent=fmt(coins);
+  Wallet.see(coins);
   const c=[chip(`◆ ${fmt(gems)}`,'wallet'), chip(`${pellets}/${MAX_PELLETS} pellets`,'wallet', pellets?'':'warn')];
   const [tier]=loyalty(), rest=[];
   if(credit) rest.push(chip(`${fmt(credit)} credit`,'wallet','gold'));
@@ -718,7 +729,7 @@ function raceOver(winner){
     const p=parlay;
     if(winner===pick && p.leg<p.legs){
       updateHud();
-      return showResult(`Leg ${p.leg} of ${p.legs} hits<strong class="w">✓</strong><small>Still on track for ${fmt(p.pay)} coins</small>`, 1800, ()=>{
+      return showResult(`Leg ${p.leg} of ${p.legs} hits<strong class="w">✓</strong><small>Still on track for ${fmt(p.pay)} sight</small>`, 1800, ()=>{
         p.leg++; state='armed'; say(`Leg ${p.leg} of ${p.legs}. Tap the water to drop the pellet`);
       });
     }
@@ -870,8 +881,8 @@ function markAlerts(){
 function openWallet(){
   const hrs=credit && creditExpires ? Math.max(0,Math.ceil((creditExpires-Date.now())/3600e3)) : 0;
   openModal(`<h3>Wallet</h3><div class="kv">
-      <div><span>Coins<p>The only thing you can bet.</p></span><span>${fmt(coins)}</span></div>
-      <div><span>Gems<p>Bought with coins. Cannot be turned back into coins.</p></span><span>${fmt(gems)}</span></div>
+      <div><span>Sight<p>The only thing you can bet. The less you have, the less you see.</p></span><span>${fmt(coins)}</span></div>
+      <div><span>Gems<p>Bought with sight. Cannot be turned back into sight.</p></span><span>${fmt(gems)}</span></div>
       <div><span>Koi Scales<p>What is left over. Converts back at 100:1, in bundles of five gems only.</p></span><span>${fmt(scales)}</span></div>
       <div><span>Pond Credit<p>${credit?`Expires in ${hrs}h. Cannot be spent on anything.`:'Cannot be spent on anything.'}</p></span><span>${fmt(credit)}</span></div>
       <div><span>Pellets<p>One per bet. The countdown does not actually refill them.</p></span><span>${pellets}/${MAX_PELLETS}</span></div>
@@ -881,14 +892,14 @@ function openWallet(){
       <div><span>Pass tier</span><span>${season.tier} of ${MAX_TIER}</span></div>
       <div><span>Loyalty</span><span>${loyalty()[0]}</span></div>
     </div>`, [
-    {label:'Buy coins', primary:true, onClick:openStore},
+    {label:'Buy sight', primary:true, onClick:openStore},
     {label:'Cash out', onClick:cashOut},
     {label:'Close', onClick:closeModal}], 'wallet');
 }
 const ACCOUNT=[
   ['Leaderboard','Where you stand, against people who are not real.', ()=>leaderboard()],
   ['Loyalty','A tier you rent by spending, and lose by stopping.', ()=>openLadder()],
-  ['Invite a friend','You both get 50 coins. They get theirs later.', ()=>invite()],
+  ['Invite a friend','You both get 50 sight. They get theirs later.', ()=>invite()],
   ['Fairness & returns','Certified by a wholly owned subsidiary of this pond.', ()=>fairness()],
   ['Play responsibly','Our commitment, and where the limits are kept.', ()=>responsible()],
   ['Settings','Sound, odds format, and whatever else is in there.', ()=>settings1()],
@@ -912,11 +923,11 @@ function every(ms, fn){ modalTimers.push(setInterval(fn, ms)); }
 
 function flashSale(){
   let left=10;
-  openModal(`<h3>Flash sale</h3><p class="big">1,000 coins for only 1,100 coins</p>
-    <p id="saleTimer">Ends in 0:10</p><p class="fine">That’s 100 coins of savings, in the other direction.</p>`, [
+  openModal(`<h3>Flash sale</h3><p class="big">1,000 sight for only 1,100 sight</p>
+    <p id="saleTimer">Ends in 0:10</p><p class="fine">That’s 100 sight of savings, in the other direction.</p>`, [
     {label:'Claim deal', primary:true, onClick:()=>{
-      if(coins<1100) return toast('You need 1,100 coins to claim this deal.');
-      coins-=100; save(); closeModal(); toast('Deal claimed. You saved −100 coins.'); }},
+      if(coins<1100) return toast('You need 1,100 sight to claim this deal.');
+      coins-=100; save(); closeModal(); toast('Deal claimed. You saved −100 sight.'); }},
     {label:'No thanks', onClick:closeModal}]);
   let ext='';
   every(1000, ()=>{ left--;
@@ -968,7 +979,7 @@ function playAd(stage, purpose){
   if(stage===0) closeModal();
   showAd({tag:`Advertisement · ${stage+1} of 2`, count:'Reward in', onEnd:()=>{
     if(stage===0) return adButtons([{label:'Skip ad', onClick:()=>playAd(1, purpose)}]);
-    adButtons([{label: purpose==='collect' ? 'Collect your coins' : 'Collect 1 pellet', primary:true, onClick:()=>{
+    adButtons([{label: purpose==='collect' ? 'Collect your sight' : 'Collect 1 pellet', primary:true, onClick:()=>{
       closeAd(); bump('ad');
       if(purpose==='collect'){ const f=pendingCollect; pendingCollect=null; if(f) f(); }
       else { pellets=Math.min(MAX_PELLETS,pellets+1); save(); updateHud(); renderSheet(); toast('+1 pellet'); }
@@ -983,9 +994,9 @@ function openShop(){
   const one=Math.ceil(gemPrice*abMul()), pack=Math.ceil(one*12), SCALE_RATE=100, scaleBundle=5*SCALE_RATE;
   const items=[
     {name:'1 gem', desc:'The price goes up every time you buy. That’s just how gems work.',
-      price:`${fmt(one)} coins`, can:coins>=one, buy:()=>{ coins-=one; gems++; gemPrice=Math.ceil(gemPrice*1.15); }},
+      price:`${fmt(one)} sight`, can:coins>=one, buy:()=>{ coins-=one; gems++; gemPrice=Math.ceil(gemPrice*1.15); }},
     {name:'Gem pack, 10 gems', desc:'Best value!* *Slightly worse value. Gems come in tens. Everything costs threes and fives.',
-      price:`${fmt(pack)} coins`, can:coins>=pack, buy:()=>{ coins-=pack; gems+=10; gemPrice=Math.ceil(gemPrice*1.15); }},
+      price:`${fmt(pack)} sight`, can:coins>=pack, buy:()=>{ coins-=pack; gems+=10; gemPrice=Math.ceil(gemPrice*1.15); }},
     {name:'Convert Koi Scales', desc:`You have ${fmt(scales)}. Scales convert at ${SCALE_RATE}:1, in bundles of five gems only, so you need ${fmt(scaleBundle)}.`,
       price:`${fmt(scaleBundle)} scales`, can:scales>=scaleBundle, buy:()=>{ scales-=scaleBundle; gems+=5; }},
     {name:'Lucky pellet', desc:`Raises your chance of winning by up to 0%. ${eta(3)}`, price:'3 gems',
@@ -1003,7 +1014,7 @@ function openShop(){
     {name:'Pond Pass VIP', desc: vip ? 'You’re VIP. Your losses now have gold trim.' : `Gold trim on every loss. That’s the whole benefit. ${eta(20)}`,
       price: vip ? 'Owned' : '20 gems', can:!vip && gems>=20, buy:()=>{ spendGems(20); vip=true; }},
   ];
-  openModal(`<h3>Pond shop</h3><p class="fine">You have ${fmt(coins)} coins, ${gems} ${gems===1?'gem':'gems'}${scales?`, ${fmt(scales)} Koi Scales`:''}.
+  openModal(`<h3>Pond shop</h3><p class="fine">You have ${fmt(coins)} sight, ${gems} ${gems===1?'gem':'gems'}${scales?`, ${fmt(scales)} Koi Scales`:''}.
       You are in pricing experiment group ${abGroup}. Prices in group ${abGroup} are higher. This cannot be changed.</p>` +
     items.map((it,i)=>`<div class="item"><div><b>${it.name}</b><p>${it.desc}</p></div><button data-i="${i}" ${it.can?'':'disabled'}>${it.price}</button></div>`).join(''),
     [{label:'Odds disclosure', onClick:lootOdds},
@@ -1039,7 +1050,7 @@ function leaderboard(){
       <div class="you"><span>4. You</span><span>${fmt(me)}</span></div>
     </div><p class="fine" style="margin-top:10px">${rival} is ${fmt(rivalScore-me)} ahead. ${rival} has been
       ${fmt(rivalScore-me)} ahead since you started.</p>`,
-    [{label:'Buy coins to climb', primary:true, onClick:openStore},
+    [{label:'Buy sight to climb', primary:true, onClick:openStore},
      {label:'Back', onClick:openAccount}]);
   save();
 }
@@ -1077,16 +1088,16 @@ function hatchEgg(){
 $('shopBtn').onclick=openShop;
 $('moreBtn').onclick=()=>openHub('wallet');
 
-// ---- buy coins (everything is pretend money) ----
+// ---- buy sight (everything is pretend money) ----
 function openStore(){
   let left=299, optIn=true, recheck=null;
   const timeStr=()=>`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`;
-  openModal(`<h3>Get coins</h3><p class="fine">Offer ends in <b id="offerTimer">${timeStr()}</b>. Prices may go up when it does.</p>` +
+  openModal(`<h3>Get your sight back</h3><p class="fine">Offer ends in <b id="offerTimer">${timeStr()}</b>. Prices may go up when it does.</p>` +
     PACKS.map((pk,i)=>`<div class="pack ${pk.hot?'hot':''}"><div><b>${fmt(pk.coins)}</b>${pk.badge?`<span class="badge">${pk.badge}</span>`:''}
       <p>${pk.name}. ${pk.note}</p></div><button data-i="${i}">${pk.was?`<s style="opacity:.6">${money(pk.was)}</s> `:''}${money(pk.price)}*</button></div>`).join('') +
-    `<label class="optin"><input type="checkbox" id="optin" checked> Also join Coin Club for ${money(clubPrice)} a week, renewing automatically forever, which I agree to by not reading this.</label>
+    `<label class="optin"><input type="checkbox" id="optin" checked> Also join Sight Club for ${money(clubPrice)} a week, renewing automatically forever, which I agree to by not reading this.</label>
      <p class="fine">*All prices are pretend. There’s no real money, card, or checkout anywhere in this game.</p>`,
-    [ ...(club ? [{label:'Manage Coin Club', onClick:cancelClub1}] : []), {label:'Close', onClick:closeModal}]);
+    [ ...(club ? [{label:'Manage Sight Club', onClick:cancelClub1}] : []), {label:'Close', onClick:closeModal}]);
   // the checkbox heals
   $('optin').onchange=e=>{
     optIn=e.target.checked;
@@ -1110,9 +1121,9 @@ function buyPack(pk, optIn){
   if(joined){ startClub(); spent+=clubPrice; tierPoints+=clubPrice; }
   updateHud(); renderSheet(); save();
   openModal(`<h3>Purchase complete</h3><div class="receipt">
-      <div><span>${pk.name}</span><span>+${fmt(got)} coins</span></div>
+      <div><span>${pk.name}</span><span>+${fmt(got)} sight</span></div>
       ${doubled?'<div><span>First purchase bonus</span><span>doubled</span></div>':''}
-      ${joined?`<div><span>Coin Club, weekly</span><span>${money(clubPrice)}</span></div>`:''}
+      ${joined?`<div><span>Sight Club, weekly</span><span>${money(clubPrice)}</span></div>`:''}
       <div class="total"><span>Pretend charge</span><span>${money(pk.price + (joined?clubPrice:0))}</span></div>
       <div><span>Lifetime pretend spending</span><span>${money(spent)}</span></div></div>
       <p class="fine" style="margin-top:10px">${pk.hot?'Welcome to the whale lounge. You now have a badge.':'Most players who bought this went on to buy more.'}</p>`,
@@ -1122,10 +1133,10 @@ function buyPack(pk, optIn){
 function startClub(){
   club=true; clearInterval(clubTimer);
   clubTimer=setInterval(()=>{ spent+=clubPrice; coins+=100; updateHud(); renderSheet(); save();
-    toast(`Coin Club renewed: ${money(clubPrice)} (pretend). +100 coins`); }, 45000);
+    toast(`Sight Club renewed: ${money(clubPrice)} (pretend). +100 sight`); }, 45000);
 }
 function cancelClub1(){
-  openModal(`<h3>Leave Coin Club?</h3><p>You’ll lose 100 coins a week, plus the warm feeling of belonging to a club.</p>`,
+  openModal(`<h3>Leave Sight Club?</h3><p>You’ll lose 100 sight a week, plus the warm feeling of belonging to a club.</p>`,
     [{label:'Keep my benefits', primary:true, onClick:closeModal},
      {label:'Continue to cancel', onClick:cancelClub2}]);
 }
@@ -1139,16 +1150,16 @@ function cancelClub3(){
   openModal(`<h3>Wait! One last offer</h3><p class="big">Stay for ${money(half)} a week</p><p>That’s half price, for one week, then back to ${money(clubPrice)}.</p>`,
     [{label:'Accept offer', primary:true, onClick:()=>{ toast(`Great choice. See you next week.`); closeModal(); }},
      {label:'No, really, cancel it', tiny:true, onClick:()=>{ club=false; clearInterval(clubTimer); save(); closeModal();
-       toast('Coin Club cancelled. We’ll miss your pretend money.'); }}]);
+       toast('Sight Club cancelled. We’ll miss your pretend money.'); }}]);
 }
 function brokeModal(){
-  openModal(`<h3>Out of coins</h3><p>You were so close. ${koi[0].name} believed in you.</p><p class="fine">*Pretend money.</p>`,
-    [{label:`Buy ${fmt(PACKS[1].coins)} coins for ${money(PACKS[1].price)}*`, primary:true, onClick:()=>buyPack(PACKS[1], false)},
-     {label:'See all coin packs', onClick:openStore},
+  openModal(`<h3>Out of sight</h3><p>You were so close. ${koi[0].name} believed in you.</p><p class="fine">*Pretend money.</p>`,
+    [{label:`Buy ${fmt(PACKS[1].coins)} sight for ${money(PACKS[1].price)}*`, primary:true, onClick:()=>buyPack(PACKS[1], false)},
+     {label:'See all sight packs', onClick:openStore},
      {label:'I don’t want to keep playing', tiny:true, onClick:()=>{
        openModal(`<h3>Really?</h3><p>${koi[0].name} is looking at you. Fish can’t blink, so she’ll be looking for a while.</p>`,
-         [{label:'Buy coins', primary:true, onClick:openStore},
-          {label:'Take 100 free coins and feel bad about it', tiny:true, onClick:()=>{ coins=100; save(); closeModal(); toast('Here are 100 coins. We’re not mad. Just disappointed.'); }}]); }}]);
+         [{label:'Buy sight', primary:true, onClick:openStore},
+          {label:'Take 100 free sight and feel bad about it', tiny:true, onClick:()=>{ coins=100; save(); closeModal(); toast('Here is 100 sight. We’re not mad. Just disappointed.'); }}]); }}]);
 }
 $('addCoins').onclick=openStore;
 
@@ -1156,9 +1167,9 @@ $('addCoins').onclick=openStore;
 const MIN_WITHDRAW=1000000;
 function cashOut(){
   openModal(`<h3>Cash out</h3><div class="receipt">
-      <div><span>Your balance</span><span>${fmt(coins)} coins</span></div>
-      <div><span>Minimum withdrawal</span><span>${fmt(MIN_WITHDRAW)} coins</span></div>
-      <div class="total"><span>Available to withdraw</span><span>${fmt(Math.max(0, coins-MIN_WITHDRAW))} coins</span></div>
+      <div><span>Your balance</span><span>${fmt(coins)} sight</span></div>
+      <div><span>Minimum withdrawal</span><span>${fmt(MIN_WITHDRAW)} sight</span></div>
+      <div class="total"><span>Available to withdraw</span><span>${fmt(Math.max(0, coins-MIN_WITHDRAW))} sight</span></div>
     </div>
     <p class="fine" style="margin-top:10px">Withdrawals are processed within 90 business days. Identity verification
       is required: please upload a photograph of your koi.</p>`, [
@@ -1176,10 +1187,10 @@ function verifyKoi(){
 function convertToGems(){
   const RATE=500, got=Math.floor(coins/RATE), rest=coins%RATE;
   openModal(`<h3>Convert to gems</h3><div class="receipt">
-      <div><span>${fmt(coins)} coins at ${fmt(RATE)}:1</span><span>${got} ${got===1?'gem':'gems'}</span></div>
+      <div><span>${fmt(coins)} sight at ${fmt(RATE)}:1</span><span>${got} ${got===1?'gem':'gems'}</span></div>
       <div><span>Remainder, as Koi Scales</span><span>${fmt(rest)}</span></div>
-      <div class="total"><span>Convertible back to coins</span><span>no</span></div></div>
-    <p class="fine" style="margin-top:10px">Conversion is one way. Gems cannot be converted to coins, cashed out,
+      <div class="total"><span>Convertible back to sight</span><span>no</span></div></div>
+    <p class="fine" style="margin-top:10px">Conversion is one way. Gems cannot be converted to sight, cashed out,
       or withdrawn, and have no value of any kind, including the kind they are sold in.</p>`, [
     {label:`Convert everything`, primary:true, disabled:coins<RATE, onClick:()=>{
       coins=0; gems+=got; scales+=rest; updateHud(); renderSheet(); save(); closeModal();
@@ -1251,8 +1262,8 @@ function stopWatch(){
 }
 function nag(){
   if(!watching) return;
-  openModal(`<h3>Still there?</h3><p>The fish are not going anywhere. Neither is the pond. Your coins, however,
-    are sitting idle.</p><p class="fine">Idle coins do not earn anything. They just sit there, like this.</p>`, [
+  openModal(`<h3>Still there?</h3><p>The fish are not going anywhere. Neither is the pond. Your sight, however,
+    are sitting idle.</p><p class="fine">Idle sight does not earn anything. They just sit there, like this.</p>`, [
     {label:'Place a bet', primary:true, onClick:()=>{ stopWatch(); closeModal(); }},
     {label:'Keep watching', onClick:()=>{ closeModal(); watchTimer=setTimeout(nag, 20000); }}]);
 }
@@ -1270,11 +1281,11 @@ $('handle').onclick=()=>setFold(!folded);
 
 // ---- other people's good fortune ----
 const TICKS=[
-  n=>`${n} just claimed the Ocean of coins pack.`,
-  n=>`Someone in Ohio just won ${fmt(Math.round(rand(80,500))*1000)} coins.`,
+  n=>`${n} just claimed the Ocean of sight pack.`,
+  n=>`Someone in Ohio just won ${fmt(Math.round(rand(80,500))*1000)} sight.`,
   n=>`${n} hatched a Legendary hat on their first egg.`,
   n=>`${n} is on a ${Math.floor(rand(9,40))}-race winning streak.`,
-  n=>`${n} upgraded to Coin Club. Three others are considering it.`,
+  n=>`${n} upgraded to Sight Club. Three others are considering it.`,
   n=>`A player near you cashed out. Details unavailable.`,
 ];
 function tickerLine(){
@@ -1314,12 +1325,12 @@ function welcomeBack(){
   if(hours<1) return dailyStreak(false);
   const demoted=decayLoyalty(days), nowTier=loyalty()[0];
   openModal(`<h3>Welcome back</h3>
-    <p>Your pond earned <b>${fmt(earned)} coins</b> while you were away${days?`, and ate ${fmt(upkeep)} in feed`:''}.</p>
+    <p>Your pond earned <b>${fmt(earned)} sight</b> while you were away${days?`, and ate ${fmt(upkeep)} in feed`:''}.</p>
     ${days?`<p class="fine">Upkeep is charged whether or not you are here. The koi do not know you are gone.</p>`:''}
     ${demoted?`<p class="fine">Your loyalty points decayed while you were away. You are now ${nowTier}.</p>`:''}`, [
     {label:'Watch an ad to collect', primary:true, onClick:()=>{
       pendingCollect=()=>{ coins+=earned; coins=Math.max(0,coins-upkeep); updateHud(); renderSheet(); save();
-        toast(`+${fmt(earned)} coins${upkeep?`, −${fmt(upkeep)} upkeep`:''}`); dailyStreak(days>0); };
+        toast(`+${fmt(earned)} sight${upkeep?`, −${fmt(upkeep)} upkeep`:''}`); dailyStreak(days>0); };
       playAd(0, 'collect'); }},
     {label:'Forfeit', tiny:true, onClick:()=>{ coins=Math.max(0,coins-upkeep); updateHud(); save(); closeModal(); dailyStreak(days>0); }}]);
 }
@@ -1371,7 +1382,7 @@ const feeOn = g => Math.round(g*FEE);
 
 // ---- season pass ----
 const SEASON_LEN=14*864e5, TIER_XP=4, MAX_TIER=50, FREE_TIER=40, PASS_PRICE=25;
-const premReward = t => t%10===0 ? 'Hat' : t%5===0 ? '2 gems' : t%2===0 ? '100 coins' : '1 gem';
+const premReward = t => t%10===0 ? 'Hat' : t%5===0 ? '2 gems' : t%2===0 ? '100 sight' : '1 gem';
 const freeReward = t => t===FREE_TIER ? 'Hat' : '—';
 function seasonCheck(){
   if(!season.ends){ season.ends=Date.now()+SEASON_LEN; return; }
@@ -1420,19 +1431,19 @@ function claimPass(){
     season.claimed.push(t);
     const r=premReward(t);
     if(r==='1 gem') gems+=1; else if(r==='2 gems') gems+=2;
-    else if(r==='100 coins'){ coins+=100; coinsGot+=100; }
+    else if(r==='100 sight'){ coins+=100; coinsGot+=100; }
     else { const k=koi[Math.floor(Math.random()*koi.length)]; if(k) hats[k.name]=['#4f86c6','#d14b7a','#3fa36b'][Math.floor(Math.random()*3)]; }
     got++;
   }
   save(); updateHud(); renderSheet();
-  toast(`Claimed ${got} ${got===1?'reward':'rewards'}${coinsGot?`, including ${fmt(coinsGot)} coins`:''}.`);
+  toast(`Claimed ${got} ${got===1?'reward':'rewards'}${coinsGot?`, including ${fmt(coinsGot)} sight`:''}.`);
   openPass();
 }
 
 // ---- daily quests ----
 const QUEST_POOL=[
   {id:'bets',  label:'Place 10 bets',               target:10,  reward:1},
-  {id:'stake', label:'Stake 500 coins',             target:500, reward:1},
+  {id:'stake', label:'Stake 500 sight',             target:500, reward:1},
   {id:'lose',  label:'Lose 5 races',                target:5,   reward:2},
   {id:'parlay',label:'Place a parlay',              target:1,   reward:1},
   {id:'pond',  label:'Feed the whole pond 3 times', target:3,   reward:1},
@@ -1556,7 +1567,7 @@ function cookies(then){
 const TOS=`<p>1. By tapping water you enter into an agreement with the pond.</p>
   <p>2. The koi are not real. You agree that you already knew this, and waive any claim arising from
      having briefly forgotten it.</p>
-  <p>3. Coins, gems, Koi Scales and Pond Credit have no value. This includes the value at which they are sold.</p>
+  <p>3. Sight, gems, Koi Scales and Pond Credit have no value. This includes the value at which they are sold.</p>
   <p>4. Displayed odds are indicative. The basis on which winnings are paid is the basis on which winnings are paid.</p>
   <p>5. We may change these terms at any time. You agree in advance to the terms as changed, including terms
      not yet written, and to any pond they are later applied to.</p>
@@ -1584,7 +1595,7 @@ function terms(then){
 function myData(){
   openModal(`<h3>Download your data</h3><div class="scrollbox">
     <p>races_watched: ${fmt(races)}</p><p>races_won: ${fmt(wins)}</p><p>races_lost: ${fmt(losses)}</p>
-    <p>coins_held: ${fmt(coins)}</p><p>pretend_spent: ${money(spent)}</p><p>login_streak: ${streakDay}</p>
+    <p>sight_held: ${fmt(coins)}</p><p>pretend_spent: ${money(spent)}</p><p>login_streak: ${streakDay}</p>
     <p>loyalty_points: ${tierPoints.toFixed(2)}</p><p>hats_owned: ${Object.keys(hats).length}</p>
     <p>eggs_opened: ${pity}</p><p>inferred_susceptibility: high</p>
     <p>inferred_region: the one with the higher prices</p><p>partners_shared_with: 1,431</p></div>
@@ -1593,7 +1604,7 @@ function myData(){
     {label:'Back', onClick:openAccount}]);
 }
 function deleteAccount(){
-  openModal(`<h3>Delete your pond</h3><p>This removes your coins, your hats, your streak, and ${koi.length} koi
+  openModal(`<h3>Delete your pond</h3><p>This removes your sight, your hats, your streak, and ${koi.length} koi
     who have done nothing wrong.</p>`, [
     {label:'Download your data first', onClick:myData},
     {label:'Continue', onClick:del2},
@@ -1606,10 +1617,10 @@ function del2(){
     {label:'Go back', onClick:closeModal}]);
 }
 function del3(){
-  openModal(`<h3>Before you go</h3><p class="big">500 coins, free</p>
+  openModal(`<h3>Before you go</h3><p class="big">500 sight, free</p>
     <p>Stay, and we will say no more about it.</p>`, [
-    {label:'Take the coins', primary:true, onClick:()=>{ coins+=500; save(); updateHud(); renderSheet();
-      closeModal(); toast('+500 coins. We are glad you stayed.'); }},
+    {label:'Take the sight', primary:true, onClick:()=>{ coins+=500; save(); updateHud(); renderSheet();
+      closeModal(); toast('+500 sight. We are glad you stayed.'); }},
     {label:'Delete anyway', tiny:true, onClick:del4}]);
 }
 function del4(){
@@ -1619,7 +1630,7 @@ function del4(){
     {label:'Understood', primary:true, onClick:closeModal},
     {label:'Delete it now, properly', tiny:true, onClick:()=>{
       try{ localStorage.removeItem(SAVE); }catch(e){}
-      openModal(`<h3>Deleted</h3><p>Your pond is gone. Reload to start a new one, at day 1, with 100 coins.</p>
+      openModal(`<h3>Deleted</h3><p>Your pond is gone. Reload to start a new one, at day 1, with 100 sight.</p>
         <p class="fine">Your 1,431 partners have been notified, and will keep their copies.</p>`,
         [{label:'Close', primary:true, onClick:closeModal}]); }}]);
 }
@@ -1627,7 +1638,7 @@ function del4(){
 // ---- invite a friend ----
 function invite(){
   openModal(`<h3>Invite a friend</h3>
-    <p>You both get 50 coins. They get theirs when they spend ${money(4.99)}.</p>
+    <p>You both get 50 sight. They get theirs when they spend ${money(4.99)}.</p>
     <p class="fine">${referrals} accepted · ${declines} declined</p>`, [
     {label:'Share your pond', primary:true, onClick:()=>{
       declines++; save(); toast('Shared with nobody. Another friend declined.'); invite(); }},
@@ -1707,6 +1718,7 @@ const onboarding = [
   next => consent ? next() : cookies(next),
   next => agreed  ? next() : terms(next),
   next => openModal(`<h3>Koi Pond Stakes</h3>
+    <p>Here you bet your sight. Win and the pond comes into focus. Lose and it fades.</p>
     <p class="fine">This game does not offer real money gambling, and does not predict success at real money gambling.
       No real money, card or checkout appears anywhere in it. Everything it does to you, it does for free.</p>`,
     [{label:'I understand', primary:true, onClick:()=>{ closeModal(); next(); }}]),
