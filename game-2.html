@@ -57,10 +57,12 @@
   .formula .t { color:var(--win); } .formula .f { color:var(--lose); }
 
   .wrap { flex:1; position:relative; margin:0 12px; min-height:0; border:1px solid var(--grid-edge); background:var(--grid-head); overflow:hidden; }
-  canvas { display:block; position:absolute; inset:0; width:100%; height:100%; touch-action:manipulation; cursor:cell; }
+  canvas { display:block; position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:cell; }
+  canvas.grabbing { cursor:grabbing; }
   /* --loss and --blur come from wallet.js. Squinting halves the blur; a lost round lifts it for a moment */
-  canvas { filter:blur(var(--blur,0px)); }
-  canvas.squint { filter:blur(calc(var(--blur,0px) * .5)); }
+  /* --zoom is how much of the blur zooming in magnifies along with the cells: most of it */
+  canvas { filter:blur(calc(var(--blur,0px) * var(--zoom,1))); }
+  canvas.squint { filter:blur(calc(var(--blur,0px) * var(--zoom,1) * .5)); }
   canvas.clear { filter:none; }
   canvas.easing { transition:filter .9s ease; }
   .vignette { position:absolute; inset:0; pointer-events:none; opacity:var(--loss,0); transition:opacity .9s ease;
@@ -74,10 +76,16 @@
   .status { flex:0 0 auto; display:flex; align-items:center; gap:14px; margin:0 12px; padding:10px 14px max(10px,env(safe-area-inset-bottom));
     background:var(--sheet); color:var(--sheet-ink); border-radius:0 0 14px 14px; font-variant-numeric:tabular-nums; }
   .status[hidden] { display:none; }
-  .status .stat { font-size:15px; } .status .stat b { font-size:20px; }
+  .status .stat { font-size:15px; white-space:nowrap; } .status .stat b { font-size:20px; }
+  .status button { white-space:nowrap; }
+  @media (max-width:430px) { .status { gap:8px; padding-left:10px; padding-right:6px; } .status .zoom .pct { min-width:40px; } .status .zoom button { min-width:24px; padding:6px 5px; } }
   .status .clock.low b { color:var(--lose); }
   .status button { margin-left:auto; padding:8px 12px; border-radius:12px; border:1.5px solid var(--accent); background:transparent; font-size:14px; }
   .status button:disabled { opacity:.4; }
+  /* Excel's zoom control, bottom right */
+  .status .zoom { display:flex; align-items:center; gap:2px; margin-left:0; }
+  .status .zoom button { margin:0; border:0; padding:6px 8px; border-radius:8px; font-size:16px; line-height:1; min-width:30px; }
+  .status .zoom .pct { font-size:13px; min-width:46px; font-variant-numeric:tabular-nums; }
 
   .sheet { position:fixed; z-index:10; left:0; right:0; bottom:0; background:var(--sheet); color:var(--sheet-ink);
     border-radius:22px 22px 0 0; padding:16px 16px max(16px,env(safe-area-inset-bottom));
@@ -155,7 +163,12 @@
 <footer class="status" id="status">
   <span class="stat">Bombs <b id="found">0/6</b></span>
   <span class="stat clock" id="clockWrap"><b id="clock">0:50</b></span>
-  <button id="squintBtn">Squint, 15 sight</button>
+  <button id="squintBtn" title="Halves the blur for 5 seconds. Costs 15 sight.">Squint · 15</button>
+  <span class="zoom" role="group" aria-label="Zoom">
+    <button id="zoomOut" aria-label="Zoom out">−</button>
+    <button class="pct" id="zoomPct" aria-label="Zoom to fit">100%</button>
+    <button id="zoomIn" aria-label="Zoom in">+</button>
+  </span>
 </footer>
 
 <section class="sheet" id="sheet" aria-label="Place a bet">
@@ -194,8 +207,11 @@ const clockFor = v => Math.round(30 + 20*v/100);                 // blurry eyes 
 // how far a bomb's shade sits from where it should be. bigger stakes, subtler bombs
 const stakeFactor = st => Math.max(.35, Math.min(1, 1 - Math.log10(Math.max(st,10)/10)*.45));
 const subtlety = (st, v) => stakeFactor(st) * (.3 + .7*v/100);
-const HUE_SHIFT=6;                        // degrees, at the very best
-const shadeText = f => (HUE_SHIFT*f/3.6).toFixed(1)+'%';
+// a bomb is its cell, a little darker. this much lightness comes off, at most
+const darken = f => .02 + .05*f;
+const shadeText = f => (darken(f)*100).toFixed(1)+'%';
+const INSIDE=[189,215,238];               // the inside of the set: Excel's pale blue, never black
+const ZMAX=8;                             // zoom, relative to the whole sheet fitting the screen
 
 // ---- fractals, each with a few windows worth looking through ----
 const FRACTALS = {
@@ -275,6 +291,38 @@ function measure(){
   canvas.width=Math.round(W*d); canvas.height=Math.round(H*d); ctx.setTransform(d,0,0,d,0,0);
 }
 function cellSize(){ return grid ? Math.min((W-RH())/grid.cols, (H-CH())/grid.rows) : 12; }
+// the view: z is zoom (1 = the whole sheet fits), x and y pan the cells under the headers
+let view={z:1, x:0, y:0};
+function geom(){ const cs=cellSize()*view.z; return {cs, x0:RH()+view.x, y0:CH()+view.y}; }
+function clampView(){
+  if(!grid) return;
+  const cs=cellSize()*view.z, gw=grid.cols*cs, gh=grid.rows*cs, vw=W-RH(), vh=H-CH();
+  view.x = gw<=vw ? 0 : Math.max(vw-gw, Math.min(0, view.x));
+  view.y = gh<=vh ? 0 : Math.max(vh-gh, Math.min(0, view.y));
+}
+// zoom by factor k, keeping the point (px, py) on the canvas still
+function zoomAt(px, py, k){
+  const z=Math.max(1, Math.min(ZMAX, view.z*k)); k=z/view.z;
+  view.x = px-RH() - (px-RH()-view.x)*k;
+  view.y = py-CH() - (py-CH()-view.y)*k;
+  view.z=z; clampView(); draw(); zoomLabel();
+}
+function zoomLabel(){
+  $('zoomPct').textContent=Math.round(view.z*100)+'%';
+  canvas.style.setProperty('--zoom', Math.pow(view.z, .8).toFixed(3)); // zoom helps you aim, not see
+}
+function fitView(){ view={z:1, x:0, y:0}; zoomLabel(); draw(); }
+function cellAt(px, py){
+  const {cs, x0, y0}=geom(), c=Math.floor((px-x0)/cs), r=Math.floor((py-y0)/cs);
+  return px<RH() || py<CH() || c<0 || r<0 || c>=grid.cols || r>=grid.rows ? null : {c, r};
+}
+// keep the selected cell on screen when the keyboard moves it
+function showCell(c, r){
+  const {cs}=geom(), vw=W-RH(), vh=H-CH();
+  if(c*cs+view.x<0) view.x=-c*cs; if((c+1)*cs+view.x>vw) view.x=vw-(c+1)*cs;
+  if(r*cs+view.y<0) view.y=-r*cs; if((r+1)*cs+view.y>vh) view.y=vh-(r+1)*cs;
+  clampView();
+}
 
 function newBoard(){
   const target = coarse ? 13 : 11;
@@ -295,6 +343,7 @@ function newBoard(){
     if(!best || score>best.score) best={cells, score};
   }
   grid={cols, rows, kind:fractal, cells:best.cells};
+  view={z:1, x:0, y:0}; zoomLabel();
   bombs=[];
   sel={c:Math.floor(cols/2), r:Math.floor(rows/2)};
   idleFormula();
@@ -305,7 +354,7 @@ function newBoard(){
 function shade(mu){
   const out=mu.filter(m=>m>=0).sort((a,b)=>a-b), n=out.length;
   const rank=m=>{ let lo=0, hi=n; while(lo<hi){ const mid=(lo+hi)>>1; if(out[mid]<m) lo=mid+1; else hi=mid; } return n>1 ? lo/(n-1) : 0; };
-  return mu.map(m=>m<0 ? {c:[0,0,0], inside:true} : {c:scale(rank(m)), inside:false});
+  return mu.map(m=>m<0 ? {c:INSIDE, inside:true} : {c:scale(rank(m)), inside:false});
 }
 // how much each cell differs from its neighbours. the house hides bombs where this is high
 function busyness(cells, cols, rows){
@@ -324,22 +373,22 @@ function plant(){
   const {cols, rows, cells}=grid, f=subtlety(stake, sight());
   const far = (c,r) => bombs.every(b=>Math.max(Math.abs(b.c-c),Math.abs(b.r-r))>=4);
   const edge = (c,r) => c<1||r<1||c>=cols-1||r>=rows-1;
-  const coloured=[], black=[];
+  const coloured=[], calm=[];
   cells.forEach((cell,i)=>{ const c=i%cols, r=Math.floor(i/cols); if(edge(c,r)) return;
-    (cell.inside ? black : coloured).push({c, r, busy:cell.busy}); });
+    (cell.inside ? calm : coloured).push({c, r, busy:cell.busy}); });
   coloured.sort((a,b)=>b.busy-a.busy);
   const pool=coloured.slice(0, Math.max(BOMBS*4, Math.floor(coloured.length*.25)));
   bombs=[];
-  // one always goes in the black, where a shade is a matter of opinion
-  const deep=black.filter(p=>{ const nb=[[1,0],[-1,0],[0,1],[0,-1]]; return nb.every(([dc,dr])=>cells[(p.r+dr)*cols+p.c+dc].inside); });
-  if(deep.length){ const p=pickOne(deep); const k=Math.max(2, Math.round(5*f));
-    bombs.push({c:p.c, r:p.r, found:false, was:[0,0,0], is:[k,k,k], dark:true}); }
+  const sink = (cell, d) => { const [h,s,l]=rgb2hsl(cell); return hsl2rgb([h, s, Math.max(0, l-d)]); };
+  // one always goes in the calm blue middle, at under half strength, where a shade is a matter of opinion
+  const deep=calm.filter(p=>[[1,0],[-1,0],[0,1],[0,-1]].every(([dc,dr])=>cells[(p.r+dr)*cols+p.c+dc].inside));
+  if(deep.length){ const p=pickOne(deep), d=darken(f)*.4;
+    bombs.push({c:p.c, r:p.r, found:false, was:INSIDE, is:sink(INSIDE, d), drop:d, calm:true}); }
   let guard=0;
   while(bombs.length<BOMBS && guard++<2000){
     const p=pickOne(guard<1500 ? pool : coloured); if(!p || !far(p.c,p.r)) continue;
-    const cell=cells[p.r*cols+p.c], [h,s,l]=rgb2hsl(cell.c), sign=Math.random()<.5?-1:1;
-    const is=hsl2rgb([h+sign*HUE_SHIFT*f, s, Math.max(0,Math.min(1, l+(Math.random()<.5?-1:1)*.008*f))]);
-    bombs.push({c:p.c, r:p.r, found:false, was:cell.c, is});
+    const cell=cells[p.r*cols+p.c], d=darken(f)*rand(.85,1);
+    bombs.push({c:p.c, r:p.r, found:false, was:cell.c, is:sink(cell.c, d), drop:d});
   }
 }
 const bombAt = (c,r) => bombs.find(b=>b.c===c && b.r===r);
@@ -347,17 +396,21 @@ const bombAt = (c,r) => bombs.find(b=>b.c===c && b.r===r);
 function draw(){
   ctx.clearRect(0,0,W,H);
   if(!grid) return;
-  const {cols, rows, cells}=grid, cs=cellSize(), x0=RH(), y0=CH();
-  ctx.fillStyle=css('--cell'); ctx.fillRect(x0,y0,W-x0,H-y0);
-  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+  const {cols, rows, cells}=grid, {cs, x0, y0}=geom(), hx=RH(), hy=CH();
+  // the visible window of cells
+  const c0=Math.max(0, Math.floor((hx-x0)/cs)), c1=Math.min(cols, Math.ceil((W-x0)/cs));
+  const r0=Math.max(0, Math.floor((hy-y0)/cs)), r1=Math.min(rows, Math.ceil((H-y0)/cs));
+  ctx.save(); ctx.beginPath(); ctx.rect(hx, hy, W-hx, H-hy); ctx.clip();
+  ctx.fillStyle=css('--cell'); ctx.fillRect(hx,hy,W-hx,H-hy);
+  for(let r=r0;r<r1;r++) for(let c=c0;c<c1;c++){
     const b=bombAt(c,r);
     ctx.fillStyle=rgb(b ? b.is : cells[r*cols+c].c);
     ctx.fillRect(x0+c*cs, y0+r*cs, Math.ceil(cs), Math.ceil(cs));
   }
   // gridlines
   ctx.strokeStyle=css('--grid-line'); ctx.lineWidth=1; ctx.beginPath();
-  for(let c=0;c<=cols;c++){ const x=Math.round(x0+c*cs)+.5; ctx.moveTo(x,y0); ctx.lineTo(x,y0+rows*cs); }
-  for(let r=0;r<=rows;r++){ const y=Math.round(y0+r*cs)+.5; ctx.moveTo(x0,y); ctx.lineTo(x0+cols*cs,y); }
+  for(let c=c0;c<=c1;c++){ const x=Math.round(x0+c*cs)+.5; ctx.moveTo(x,y0+r0*cs); ctx.lineTo(x,y0+r1*cs); }
+  for(let r=r0;r<=r1;r++){ const y=Math.round(y0+r*cs)+.5; ctx.moveTo(x0+c0*cs,y); ctx.lineTo(x0+c1*cs,y); }
   ctx.stroke();
   // bombs: found ones get drawn, the rest only when the round is over
   for(const b of bombs){
@@ -369,23 +422,27 @@ function draw(){
       ctx.moveTo(cx+cs*.35, cy-cs*.35); ctx.lineTo(cx+cs*.7, cy-cs*.75); ctx.stroke();
     } else if(revealing){
       ctx.strokeStyle='#e0261b'; ctx.lineWidth=2.5;
-      ctx.beginPath(); ctx.arc(cx, cy, cs*1.6, 0, Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, Math.max(cs*1.6, 14), 0, Math.PI*2); ctx.stroke();
     }
   }
-  // headers
-  const head=css('--grid-head'), text=css('--grid-text'), edgeC=css('--grid-edge');
-  ctx.fillStyle=head; ctx.fillRect(0,0,W,y0); ctx.fillRect(0,0,x0,H);
-  ctx.fillStyle=text; ctx.font='10px ui-sans-serif, system-ui, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-  const everyC=Math.ceil(18/cs), everyR=Math.ceil(13/cs);
-  for(let c=0;c<cols;c+=everyC) ctx.fillText(colName(c), x0+(c+.5)*cs, y0/2);
-  for(let r=0;r<rows;r+=everyR) ctx.fillText(r+1, x0/2, y0+(r+.5)*cs);
-  ctx.strokeStyle=edgeC; ctx.lineWidth=1; ctx.beginPath();
-  ctx.moveTo(0,y0+.5); ctx.lineTo(W,y0+.5); ctx.moveTo(x0+.5,0); ctx.lineTo(x0+.5,H); ctx.stroke();
   // the selected cell, Excel green
   if(state==='playing' || revealing){
     ctx.strokeStyle=css('--select'); ctx.lineWidth=2;
     ctx.strokeRect(x0+sel.c*cs-1, y0+sel.r*cs-1, cs+2, cs+2);
   }
+  ctx.restore();
+  // headers stay put while the cells move under them, like frozen panes
+  const head=css('--grid-head'), text=css('--grid-text'), edgeC=css('--grid-edge');
+  ctx.fillStyle=head; ctx.fillRect(0,0,W,hy); ctx.fillRect(0,0,hx,H);
+  ctx.fillStyle=text; ctx.font='10px ui-sans-serif, system-ui, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  const everyC=Math.ceil(18/cs), everyR=Math.ceil(13/cs);
+  ctx.save(); ctx.beginPath(); ctx.rect(hx, 0, W-hx, hy); ctx.clip();
+  for(let c=Math.floor(c0/everyC)*everyC; c<c1; c+=everyC) ctx.fillText(colName(c), x0+(c+.5)*cs, hy/2);
+  ctx.restore(); ctx.save(); ctx.beginPath(); ctx.rect(0, hy, hx, H-hy); ctx.clip();
+  for(let r=Math.floor(r0/everyR)*everyR; r<r1; r+=everyR) ctx.fillText(r+1, hx/2, y0+(r+.5)*cs);
+  ctx.restore();
+  ctx.strokeStyle=edgeC; ctx.lineWidth=1; ctx.beginPath();
+  ctx.moveTo(0,hy+.5); ctx.lineTo(W,hy+.5); ctx.moveTo(hx+.5,0); ctx.lineTo(hx+.5,H); ctx.stroke();
 }
 
 // ---- vision ----
@@ -430,7 +487,7 @@ function renderSheet(){
   if(stake>coins) stake=Math.min(10, coins);
   toggleRow($('amounts'), AMOUNTS.map(a=>{ const v=a==='All in'?coins:a; return [a, v, v>coins||v<=0]; }), stake, v=>{ stake=v; save(); });
   const f=subtlety(stake, sight());
-  $('terms').textContent = `${BOMBS} bombs · ${clockFor(sight())} seconds · shade difference ${shadeText(f)} · the less you see, the less of both`;
+  $('terms').textContent = `${BOMBS} bombs · ${clockFor(sight())} seconds · bombs ${shadeText(f)} darker · the less you see, the less of both`;
   const go=$('go');
   if(coins<=0){ go.disabled=false; go.textContent='Out of sight. Back to the arcade'; go.onclick=()=>location.href='home.html'; return; }
   go.onclick=start;
@@ -447,7 +504,7 @@ function start(){
   $('sheet').classList.add('hidden');
   $('squintBtn').disabled = coins<SQUINT_COST;
   updateHud(); updateStatus(); draw();
-  say(`Find ${BOMBS} cells a shade off from their neighbours`, 2600);
+  say(`Find ${BOMBS} cells a shade darker than their neighbours. Scroll or pinch to zoom, drag to move`, 3200);
   canvas.focus({preventScroll:true});
   lastTick=performance.now(); requestAnimationFrame(tick);
 }
@@ -507,12 +564,12 @@ function win(){
 function lose(){
   state='result'; timeLeft=0; updateStatus();
   const found=bombs.filter(b=>b.found).length;
-  const dark=bombs.find(b=>b.dark && !b.found);
+  const quiet=bombs.find(b=>b.calm && !b.found);
   setFormula('', `=COUNTIF(${'A1:'+ref(grid.cols-1, grid.rows-1)},"bomb")`, String(BOMBS));
   // for a moment, everything is clear, so you can see how close they were
   revealing=true; canvas.classList.add('easing'); applyVision(); draw();
   const close = found===BOMBS-1 ? `<small>${found} of ${BOMBS}. One bomb away from ${fmt(stake*MULT)}!</small>` : `<small>${found} of ${BOMBS} found.</small>`;
-  const note = dark ? `<small>One was in the black, ${Math.round(dark.is[0]/2.55*10)/10}% lighter than black. Technically visible.</small>` : '';
+  const note = quiet ? `<small>One was in the blue, ${(quiet.drop*100).toFixed(1)}% darker than the blue. Technically visible.</small>` : '';
   showResult(`Time’s up<strong class="l">−${fmt(stake)}</strong>${close}${note}<small>For a moment, you can see everything you bet.</small>`, 4200, ()=>{
     revealing=false; applyVision(); draw();
     if(!warned && sight()<60){ warned=true; save(); setTimeout(()=>toast('Your sight is now below the arcade average.'), 1200); }
@@ -545,7 +602,7 @@ function shop(){
     <p>You see ${Math.round(sight())}% of the sheet. ${sight()<60 ? 'That is below the arcade average.' : 'For now.'}</p>` +
     Wallet.PACKS.map((pk,i)=>`<div class="item"><div><b>${pk.name}, ${fmt(pk.coins)}</b><p>${pk.note}</p></div>
       <button data-i="${i}">${money(pk.price)}*</button></div>`).join('') +
-    `<div class="item"><div><b>Squint</b><p>Halves the blur for 5 seconds. One per round, during a round.</p></div>
+    `<div class="item"><div><b>Squint</b><p>Halves the blur for 5 seconds. One per round, during a round. Zooming in magnifies the blur too.</p></div>
       <button disabled>${SQUINT_COST} sight</button></div>
     <p class="fine">*All prices are pretend. There’s no real money, card, or checkout anywhere in the arcade.</p>`,
     [{label:'Close', onClick:closeModal}]);
@@ -565,10 +622,10 @@ function broke(){
     [{label:'Get your sight back', primary:true, onClick:shop}, {label:'Back to the arcade', onClick:()=>location.href='home.html'}]);
 }
 $('howBtn').onclick=()=>openModal(`<h3>How it works</h3>
-  <p>${BOMBS} cells in the sheet are a shade off from where the fractal says they should be. Tap each one before the clock runs out.</p>
+  <p>${BOMBS} cells in the sheet are a shade darker than the fractal says they should be. Scroll or pinch to zoom, and drag to move around. Tap each one before the clock runs out.</p>
   <p>You bet sight. A wrong cell costs ${MISS_PENALTY} seconds. Find all ${BOMBS} and win ${MULT}× your stake, less a booth fee.</p>
   <p>The less sight you have, the blurrier the sheet, the shorter the clock, and the fainter the bombs, in this game and every other one.</p>
-  <p class="fine">Bigger stakes hide the bombs better. One bomb is always somewhere very dark. Seconds are house seconds, which are ${Math.round((HOUSE_SECOND-1)*100)}% shorter. Rounds played: ${rounds}. Rounds won: ${wins}.</p>`,
+  <p class="fine">Bigger stakes hide the bombs better. One bomb always hides in the calm blue middle, fainter than the rest. Seconds are house seconds, which are ${Math.round((HOUSE_SECOND-1)*100)}% shorter. Rounds played: ${rounds}. Rounds won: ${wins}.</p>`,
   [{label:'Got it', primary:true, onClick:closeModal}]);
 $('footBtn').onclick=()=>openModal(`<h3>Play responsibly</h3>
   <p>Sight here is a number saved in your browser. Your actual eyes are fine.</p>
@@ -578,24 +635,68 @@ $('footBtn').onclick=()=>openModal(`<h3>Play responsibly</h3>
 $('modal').addEventListener('click', e=>{ if(e.target===$('modal')) closeModal(); });
 
 // ---- input ----
-canvas.addEventListener('click', e=>{
-  if(state!=='playing' || !grid) return;
-  const rect=canvas.getBoundingClientRect(), cs=cellSize();
-  const c=Math.floor((e.clientX-rect.left-RH())/cs), r=Math.floor((e.clientY-rect.top-CH())/cs);
-  if(c<0||r<0||c>=grid.cols||r>=grid.rows) return;
-  check(c, r);
+const pts=new Map(); let gesture=null;   // gesture: {moved, sx, sy, lx, ly, pinch}
+const local = e => { const r=canvas.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; };
+const pair = () => { const [a,b]=[...pts.values()]; return {d:Math.hypot(a.x-b.x, a.y-b.y), x:(a.x+b.x)/2, y:(a.y+b.y)/2}; };
+canvas.addEventListener('pointerdown', e=>{
+  if(!grid) return;
+  canvas.setPointerCapture(e.pointerId);
+  const p=local(e); pts.set(e.pointerId, p);
+  if(pts.size===1) gesture={moved:false, sx:p.x, sy:p.y, lx:p.x, ly:p.y};
+  else if(pts.size===2 && gesture){ gesture.moved=true; gesture.pinch=pair(); }
 });
+canvas.addEventListener('pointermove', e=>{
+  if(!pts.has(e.pointerId) || !gesture) return;
+  const p=local(e); pts.set(e.pointerId, p);
+  if(pts.size===2){
+    const now=pair(), was=gesture.pinch;
+    view.x+=now.x-was.x; view.y+=now.y-was.y;
+    zoomAt(now.x, now.y, now.d/was.d); gesture.pinch=now;
+    return;
+  }
+  if(!gesture.moved && Math.hypot(p.x-gesture.sx, p.y-gesture.sy)>6){ gesture.moved=true; canvas.classList.add('grabbing'); }
+  if(gesture.moved){ view.x+=p.x-gesture.lx; view.y+=p.y-gesture.ly; clampView(); draw(); }
+  gesture.lx=p.x; gesture.ly=p.y;
+});
+function lift(e, tap){
+  if(!pts.has(e.pointerId)) return;
+  const p=local(e); pts.delete(e.pointerId);
+  if(pts.size===0){
+    if(tap && gesture && !gesture.moved && state==='playing'){ const cell=cellAt(p.x, p.y); if(cell) check(cell.c, cell.r); }
+    gesture=null; canvas.classList.remove('grabbing');
+  } else if(gesture){
+    // one finger left after a pinch: carry on panning from it, and never count it as a tap
+    const q=[...pts.values()][0]; gesture.pinch=null; gesture.lx=q.x; gesture.ly=q.y;
+  }
+}
+canvas.addEventListener('pointerup', e=>lift(e, true));
+canvas.addEventListener('pointercancel', e=>lift(e, false));
+canvas.addEventListener('wheel', e=>{
+  if(!grid) return;
+  e.preventDefault();
+  const p=local(e), k=Math.exp(-e.deltaY*(e.ctrlKey ? .01 : .0018)); // ctrlKey: a trackpad pinch
+  zoomAt(p.x, p.y, k);
+}, {passive:false});
+const zoomStep = k => zoomAt(RH()+(W-RH())/2, CH()+(H-CH())/2, k);
+$('zoomIn').onclick=()=>zoomStep(1.5);
+$('zoomOut').onclick=()=>zoomStep(1/1.5);
+$('zoomPct').onclick=fitView;
 // arrow keys move the selection like a spreadsheet, Enter checks the cell
 canvas.addEventListener('keydown', e=>{
-  if(state!=='playing' || !grid) return;
+  if(!grid) return;
+  if(e.key==='+' || e.key==='='){ e.preventDefault(); return zoomStep(1.5); }
+  if(e.key==='-' || e.key==='_'){ e.preventDefault(); return zoomStep(1/1.5); }
+  if(e.key==='0'){ e.preventDefault(); return fitView(); }
+  if(state!=='playing') return;
   const mv={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
   if(mv){ e.preventDefault();
     sel={c:Math.max(0,Math.min(grid.cols-1, sel.c+mv[0])), r:Math.max(0,Math.min(grid.rows-1, sel.r+mv[1]))};
+    showCell(sel.c, sel.r);
     setFormula(ref(sel.c,sel.r), `=ISBOMB(${ref(sel.c,sel.r)})`); draw(); }
   else if(e.key==='Enter' || e.key===' '){ e.preventDefault(); check(sel.c, sel.r); }
 });
 addEventListener('keydown', e=>{ if(e.key==='Escape' && !$('modal').hidden) closeModal(); });
-new ResizeObserver(()=>{ measure(); if(!grid) newBoard(); else draw(); }).observe($('wrap'));
+new ResizeObserver(()=>{ measure(); if(!grid) newBoard(); else { clampView(); draw(); } }).observe($('wrap'));
 const matchDark=matchMedia('(prefers-color-scheme: dark)'); matchDark.addEventListener('change', draw);
 Wallet.onChange(n=>{ coins=n; updateHud(); if(state==='betting') renderSheet(); });
 addEventListener('pageshow', ()=>{ coins=Wallet.get(); updateHud(); if(state==='betting') renderSheet(); });
