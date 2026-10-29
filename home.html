@@ -198,7 +198,7 @@
 <div class="toast" id="toast" role="status"></div>
 
 <script src="wallet.js"></script>
-<script src="vision.js"></script>
+<script src="vision.js?v=3"></script>
 <script>
 const $ = id => document.getElementById(id);
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -345,10 +345,11 @@ if(new URLSearchParams(location.search).has('fresh')){ Wallet.set(Wallet.START);
 const HINT=$('hint').textContent;
 let r2s=null; // smoothed, so the readout doesn't flicker with the static
 window.skyMeter = Vision.mount($('sky'), st=>{
-  r2s = r2s===null || Math.abs(st.house-r2s)>.05 ? st.house : r2s*.85+st.house*.15;
+  const h = st.house ?? 0; // older cached vision.js has no house R2; never let that blank the skyline
+  r2s = r2s===null || Math.abs(h-r2s)>.05 ? h : r2s*.85+h*.15;
   $('r2').textContent=r2s.toFixed(2);
   $('city').textContent=`City R² ${st.r2.toFixed(2)}`;
-  const lost=Math.max(0, 100-Math.round(st.sight));
+  const lost=Math.max(0, 100-Math.round(st.sight ?? Wallet.get()));
   $('explain').textContent = lost
     ? `You've lost ${lost} sight. The house's noise now explains ${Math.round(r2s*100)}% of what you see; the skyline line explains ${Math.round(st.r2*100)}% of the city.`
     : `Every point of sight you lose adds the house's noise to the city behind you. House R² is how much of what you see is that noise.`;
