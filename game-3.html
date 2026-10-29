@@ -26,14 +26,14 @@
   <div class="tape" aria-hidden="true"></div>
   <h1>Locked tent</h1>
   <p>The flap is tied shut. A sign says “soon.” Coming soon.</p>
-  <p class="purse">Your arcade purse: <b id="coins">…</b> coins</p>
+  <p class="purse">Your sight: <b id="coins">…</b></p>
   <a href="home.html">Back to the arcade</a>
 </main>
 <script src="wallet.js"></script>
 <script>
-// When this game is built: read coins with Wallet.get(), and write them back with
+// When this game is built, it is played for sight: read it with Wallet.get(), write it back with
 // Wallet.set(n) / Wallet.add(n) / Wallet.spend(n). See wallet.js.
-document.getElementById('coins').textContent = Wallet.get().toLocaleString('en-US');
+document.getElementById('coins').textContent = Math.floor(Wallet.get()).toLocaleString('en-US');
 </script>
 </body>
 </html>

@@ -40,6 +40,19 @@
 
   .hud { position:fixed; top:max(12px,env(safe-area-inset-top)); left:18px; right:18px; z-index:5;
     display:flex; justify-content:space-between; align-items:flex-start; pointer-events:none; }
+  /* Chicago skyline vision meter (vision.js) is the ground everything stands on */
+  .sky { position:absolute; inset:0; width:100%; height:100%; display:block; pointer-events:none; }
+  .paths { opacity:.82; }
+  .hud, .hint { color:#f6efe0; --caption:rgba(246,239,224,.82); }
+  .hud > div { background:rgba(10,16,34,.55); padding:8px 12px; border-radius:14px; }
+  .meter { margin:6px 0 0; text-align:right; font-size:13px; }
+  .meter b { font-size:20px; font-weight:600; font-variant-numeric:tabular-nums; margin-left:4px; }
+  .pips { display:flex; gap:4px; justify-content:flex-end; margin-top:5px; }
+  .pips i { width:14px; height:6px; border-radius:3px; background:rgba(246,239,224,.85); box-shadow:0 1px 2px rgba(0,0,0,.4); }
+  .pips i.lost { background:rgba(246,239,224,.18); }
+  .hint.end { z-index:5; font-style:normal; font-size:16px; font-weight:600; width:fit-content; max-width:calc(100vw - 64px);
+    margin:0 auto; padding:10px 16px; border-radius:14px; background:rgba(10,16,34,.8); }
+  .hud, .hint { text-shadow:0 1px 3px rgba(0,0,0,.65), 0 0 calc(var(--loss,0)*8px) var(--sheet), 0 0 calc(var(--loss,0)*3px) var(--sheet); }
   .purse b { font-size:28px; font-weight:600; font-variant-numeric:tabular-nums; }
   .purse .unit { font-size:16px; margin-left:6px; }
   .purse p { margin:2px 0 0; font-size:13px; color:var(--caption); }
@@ -77,6 +90,34 @@
   .panel .primary { background:var(--accent); color:var(--accent-ink); border-color:transparent; font-weight:600; }
   .panel .primary[aria-disabled="true"] { opacity:.45; pointer-events:none; }
 
+  /* your sight, from wallet.js: the grounds blur and the edges darken as it runs out */
+  .world { filter:blur(var(--blur,0px)); transition:filter .8s ease; }
+  .blind { position:fixed; inset:0; z-index:4; pointer-events:none;
+    background:radial-gradient(ellipse at 50% 45%, transparent calc(78% - var(--loss,0)*70%),
+      rgba(5,12,11,calc(.3 + var(--loss,0)*.6)) calc(100% - var(--loss,0)*55%)); }
+  .shopbtn { pointer-events:auto; margin-top:8px; padding:7px 16px; border-radius:18px; border:0; background:var(--accent);
+    color:var(--accent-ink); font-weight:600; font-size:15px; cursor:pointer; text-shadow:none; }
+
+  /* the shop: the same packs every game sells (wallet.js) */
+  .backdrop { position:fixed; inset:0; z-index:20; background:rgba(10,16,34,.55); display:flex; align-items:center; justify-content:center; padding:20px; }
+  .backdrop[hidden] { display:none; }
+  .card { background:var(--sheet); border-radius:20px; padding:20px; width:min(380px,100%); max-height:80vh; overflow-y:auto;
+    box-shadow:0 20px 60px rgba(0,0,0,.3); box-sizing:border-box; }
+  .card h3 { margin:0 0 6px; font-size:22px; }
+  .card .fine { font-size:13px; opacity:.7; margin:0 0 12px; }
+  .pack { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px; margin-bottom:8px;
+    border:1.5px solid var(--line); border-radius:14px; }
+  .pack.hot { border-color:var(--gold); box-shadow:inset 0 0 0 1.5px var(--gold); }
+  .pack b { font-size:18px; font-variant-numeric:tabular-nums; }
+  .pack .badge { display:inline-block; font-size:12px; font-weight:600; color:var(--gold); margin-left:6px; }
+  .pack p { margin:2px 0 0; font-size:13px; opacity:.75; }
+  .pack button, .card .close { flex:0 0 auto; padding:8px 12px; border-radius:10px; border:1.5px solid var(--accent); background:transparent;
+    font-size:14px; white-space:nowrap; cursor:pointer; }
+  .card .close { display:block; width:100%; margin-top:8px; padding:12px; border-color:var(--line); font-size:16px; }
+  .toast { position:fixed; z-index:30; left:50%; bottom:calc(max(16px,env(safe-area-inset-bottom)) + 60px); transform:translateX(-50%);
+    background:var(--ink); color:var(--sheet); padding:10px 16px; border-radius:12px; font-size:15px; opacity:0; transition:opacity .3s;
+    pointer-events:none; white-space:nowrap; }
+  .toast.show { opacity:1; }
   .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
   @media (prefers-reduced-motion: reduce) { .panel { transition:none; } .walker.step { animation:none; } }
 </style>
@@ -84,16 +125,22 @@
 <body>
 <header class="hud">
   <div class="purse">
-    <b id="coins">100</b><span class="unit">coins</span>
-    <p>One purse, every game.</p>
+    <b id="coins">100</b><span class="unit">sight</span>
+    <p>Every game here is played for your sight.</p>
+    <button class="shopbtn" id="shopBtn">Shop</button>
   </div>
-  <p class="title">The Arcade</p>
+  <div>
+    <p class="title">The Arcade</p>
+    <p class="meter" id="meter" title="Brightness of each skyline cell regressed on its height">Vision R²<b id="r2">0.59</b></p>
+    <div class="pips" id="pips" role="img" aria-label="Vision remaining"><i></i><i></i><i></i><i></i><i></i></div>
+  </div>
 </header>
 
 <main class="world" id="world" aria-label="Arcade grounds">
+  <canvas class="sky" id="sky" aria-hidden="true"></canvas>
   <svg class="paths" id="paths" aria-hidden="true"></svg>
 
-  <a class="station" id="st-coypond" href="index.html" data-id="coypond">
+  <a class="station" id="st-coypond" href="coypond.html" data-id="coypond">
     <svg width="110" height="74" viewBox="-55 -37 110 74" aria-hidden="true">
       <ellipse rx="54" ry="34" fill="var(--water-deep)"/>
       <ellipse rx="48" ry="29" fill="var(--water)"/>
@@ -133,6 +180,8 @@
   <div class="walker" id="walker" aria-hidden="true"></div>
 </main>
 
+<div class="blind" aria-hidden="true"></div>
+
 <p class="hint" id="hint">Tap a game to play, or tap anywhere to walk around.</p>
 
 <section class="panel" id="panel" aria-live="polite">
@@ -141,7 +190,11 @@
   <div class="acts" id="pActs"></div>
 </section>
 
+<div class="backdrop" id="shop" hidden><div class="card" role="dialog" aria-modal="true" aria-labelledby="shopTitle" id="shopCard"></div></div>
+<div class="toast" id="toast" role="status"></div>
+
 <script src="wallet.js"></script>
+<script src="vision.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -150,9 +203,9 @@ const fmt = n => Math.floor(n).toLocaleString('en-US');
 // Add a game: give it its own .html file, a station in the markup, and an entry here.
 const GAMES = [
   { id:'game-2', file:'game-2.html', name:'Bomb Sheet', ready:true,
-    desc:'Six bombs hide in a fractal spreadsheet, each a shade off from its neighbours. Find them before the clock runs out. Losing costs coins and a little of your vision.' },
-  { id:'coypond', file:'index.html', name:'Koi Pond Stakes', ready:true,
-    desc:'Bet on which koi eats the pellet first. Coins you win come back to the arcade with you.' },
+    desc:'Six bombs hide in a fractal spreadsheet, each a shade off from its neighbours. Bet sight, find them all before the clock runs out, and see a little better. Miss, and see a little worse.' },
+  { id:'coypond', file:'coypond.html', name:'Koi Pond Stakes', ready:true,
+    desc:'Bet your sight on which koi eats the pellet first. Whatever you win or lose comes back here with you.' },
   { id:'game-3', file:'game-3.html', name:'Locked tent', ready:false,
     desc:'The flap is tied shut. A sign says “soon,” and has said so for a while.' },
 ];
@@ -263,6 +316,7 @@ $('world').addEventListener('click', e=>{
 const MOVE=['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','a','d','w','s'];
 addEventListener('keydown', e=>{
   if(e.target.closest && e.target.closest('input,textarea')) return;
+  if(!$('shop').hidden) return;  // the shop has the keyboard while it is open
   const k=e.key.length===1 ? e.key.toLowerCase() : e.key;
   if(MOVE.includes(k)){ keys.add(k); e.preventDefault(); }
   if((k==='Enter'||k===' ') && shown && document.activeElement===document.body){
@@ -274,12 +328,55 @@ addEventListener('keyup', e=>keys.delete(e.key.length===1 ? e.key.toLowerCase() 
 addEventListener('blur', ()=>keys.clear());
 addEventListener('resize', ()=>{ layout(); if(me.tx===null && shown) standAt(shown); });
 
-// ---- purse ----
-function showCoins(n){ $('coins').textContent=fmt(n); }
+// ---- sight: the one currency every game uses (see wallet.js) ----
+function showCoins(n){ $('coins').textContent=fmt(n); Wallet.see(n); }
 showCoins(Wallet.get());
 Wallet.onChange(showCoins);
 // coming back from a game with the back button can restore this page from cache
 addEventListener('pageshow', ()=>showCoins(Wallet.get()));
+
+// ---- vision meter: the Chicago skyline regression (see vision.js) ----
+// home.html?fresh resets sight and the noise, for test runs and critique
+if(new URLSearchParams(location.search).has('fresh')){ Wallet.set(Wallet.START); Vision.reset(); history.replaceState(null,'',location.pathname); }
+const HINT=$('hint').textContent;
+let r2s=null; // smoothed, so the readout doesn't flicker with the static
+Vision.mount($('sky'), st=>{
+  r2s = r2s===null || Math.abs(st.r2-r2s)>.05 ? st.r2 : r2s*.85+st.r2*.15;
+  $('r2').textContent=r2s.toFixed(2);
+  const left=5-st.level;
+  [...$('pips').children].forEach((el,i)=>el.classList.toggle('lost', i>=left));
+  $('pips').setAttribute('aria-label', `Vision remaining: ${left} of 5`);
+  const end=st.level>=5;
+  $('hint').classList.toggle('end', end);
+  $('hint').textContent = end
+    ? `The model explains ${Math.round(r2s*100)}% of the city. The house explains the rest.`
+    : HINT;
+});
+
+// ---- shop: one currency for the whole arcade, so it is sold here, before you pick a game ----
+const money = n => '$'+n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+let toastTimer=null;
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'), 2600); }
+function openShop(){
+  $('shopCard').innerHTML = `<h3 id="shopTitle">Get your sight back</h3>
+    <p class="fine">Every game in the arcade spends the same sight. You have ${fmt(Wallet.get())}.</p>` +
+    Wallet.PACKS.map((pk,i)=>`<div class="pack ${pk.hot?'hot':''}"><div><b>${fmt(pk.coins)}</b>${pk.badge?`<span class="badge">${pk.badge}</span>`:''}
+      <p>${pk.name}. ${pk.note}</p></div><button data-i="${i}">${money(pk.price)}*</button></div>`).join('') +
+    `<p class="fine">*All prices are pretend. There’s no real money, card, or checkout anywhere in the arcade.</p>
+     <button class="close" id="shopClose">Close</button>`;
+  $('shopCard').querySelectorAll('.pack button').forEach(b=>b.onclick=()=>{
+    const pk=Wallet.PACKS[+b.dataset.i];
+    showCoins(Wallet.add(pk.coins)); openShop();
+    toast(`+${fmt(pk.coins)} sight. Pretend charge: ${money(pk.price)}`);
+  });
+  $('shopClose').onclick=closeShop;
+  $('shop').hidden=false; $('shopClose').focus();
+}
+function closeShop(){ $('shop').hidden=true; $('shopBtn').focus(); }
+$('shopBtn').onclick=openShop;
+$('shop').addEventListener('click', e=>{ if(e.target.id==='shop') closeShop(); });
+addEventListener('keydown', e=>{ if(e.key==='Escape' && !$('shop').hidden) closeShop(); });
 
 // ---- boot ----
 layout();

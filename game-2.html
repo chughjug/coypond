@@ -58,9 +58,14 @@
 
   .wrap { flex:1; position:relative; margin:0 12px; min-height:0; border:1px solid var(--grid-edge); background:var(--grid-head); overflow:hidden; }
   canvas { display:block; position:absolute; inset:0; width:100%; height:100%; touch-action:manipulation; cursor:cell; }
+  /* --loss and --blur come from wallet.js. Squinting halves the blur; a lost round lifts it for a moment */
+  canvas { filter:blur(var(--blur,0px)); }
+  canvas.squint { filter:blur(calc(var(--blur,0px) * .5)); }
+  canvas.clear { filter:none; }
   canvas.easing { transition:filter .9s ease; }
-  .vignette { position:absolute; inset:0; pointer-events:none; opacity:0; transition:opacity .9s ease;
+  .vignette { position:absolute; inset:0; pointer-events:none; opacity:var(--loss,0); transition:opacity .9s ease;
     background:radial-gradient(ellipse at 50% 50%, transparent 35%, rgba(0,0,0,.75) 100%); }
+  .squint ~ .vignette { opacity:calc(var(--loss,0) * .5); } .clear ~ .vignette { opacity:0; }
   .caption { position:absolute; left:50%; top:10px; transform:translateX(-50%); margin:0; max-width:86%;
     padding:5px 12px; border-radius:14px; background:var(--sheet); color:var(--sheet-ink); font-style:italic; font-size:15px;
     box-shadow:0 2px 10px rgba(0,0,0,.18); pointer-events:none; text-align:center; }
@@ -130,11 +135,11 @@
 <body>
 <header class="hud">
   <div class="purse">
-    <b id="coins">100</b><span class="unit">coins</span>
+    <b id="coins">100</b><span class="unit">sight</span>
     <div class="eyes"><span>Vision</span><span class="meter"><i id="visionBar"></i></span><span id="visionPct">100%</span></div>
   </div>
   <div class="hudright">
-    <button class="shopbtn" id="shopBtn">Eye care</button>
+    <button class="shopbtn" id="shopBtn">Shop</button>
     <a class="homebtn" href="home.html" aria-label="Back to the arcade">⌂</a>
   </div>
 </header>
@@ -150,7 +155,7 @@
 <footer class="status" id="status">
   <span class="stat">Bombs <b id="found">0/6</b></span>
   <span class="stat clock" id="clockWrap"><b id="clock">0:50</b></span>
-  <button id="squintBtn">Squint, 15 coins</button>
+  <button id="squintBtn">Squint, 15 sight</button>
 </footer>
 
 <section class="sheet" id="sheet" aria-label="Place a bet">
@@ -170,7 +175,6 @@
 <div class="toast" id="toast" role="status"></div>
 
 <script src="wallet.js"></script>
-<script src="vision.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -186,7 +190,6 @@ const BOMBS=6, MULT=25, FEE=.1;          // the bet sheet shows MULT; FEE comes 
 const HOUSE_SECOND=1.15;                 // the clock ticks 15% fast. see the fine print
 const MISS_PENALTY=3, SQUINT_COST=15, SQUINT_MS=5000;
 const AMOUNTS=[10,25,50,'All in'];
-const visionCost = st => Math.min(30, Math.max(4, Math.round(Math.sqrt(st)*2)));
 const clockFor = v => Math.round(30 + 20*v/100);                 // blurry eyes get less time
 // how far a bomb's shade sits from where it should be. bigger stakes, subtler bombs
 const stakeFactor = st => Math.max(.35, Math.min(1, 1 - Math.log10(Math.max(st,10)/10)*.45));
@@ -242,21 +245,22 @@ function hsl2rgb([h,s,l]){
 const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
 
 // ---- state ----
-let coins=Wallet.get(), vision=Vision.get();
+let coins=Wallet.get();  // the arcade wallet holds sight; every game bets it
+const sight = () => (1-Wallet.loss(coins))*100;  // how well you see, 0..100
 let fractal='mandelbrot', stake=10, state='betting'; // betting | playing | result
 let grid=null;          // {cols, rows, kind, cells:[{c:[r,g,b], inside, busy}]}
 let bombs=[], sel={c:0,r:0}, timeLeft=0, lastTick=0, squintUntil=0, squinted=false, revealing=false;
-let rounds=0, wins=0, drops=0, warned=false;
+let rounds=0, wins=0, warned=false;
 const SAVE='arcade.bombsheet.v1';
 function save(){
-  try { localStorage.setItem(SAVE, JSON.stringify({fractal, stake, rounds, wins, drops, warned})); } catch(e){}
+  try { localStorage.setItem(SAVE, JSON.stringify({fractal, stake, rounds, wins, warned})); } catch(e){}
 }
 function load(){
   let d; try { d=JSON.parse(localStorage.getItem(SAVE)||'null'); } catch(e){}
   if(!d) return;
   const num=(v,f)=>typeof v==='number' && isFinite(v) ? v : f;
   if(FRACTALS[d.fractal]) fractal=d.fractal;
-  stake=num(d.stake,stake); rounds=num(d.rounds,0); wins=num(d.wins,0); drops=num(d.drops,0); warned=!!d.warned;
+  stake=num(d.stake,stake); rounds=num(d.rounds,0); wins=num(d.wins,0); warned=!!d.warned;
 }
 
 // ---- the board ----
@@ -317,7 +321,7 @@ function busyness(cells, cols, rows){
 }
 
 function plant(){
-  const {cols, rows, cells}=grid, f=subtlety(stake, vision);
+  const {cols, rows, cells}=grid, f=subtlety(stake, sight());
   const far = (c,r) => bombs.every(b=>Math.max(Math.abs(b.c-c),Math.abs(b.r-r))>=4);
   const edge = (c,r) => c<1||r<1||c>=cols-1||r>=rows-1;
   const coloured=[], black=[];
@@ -386,15 +390,11 @@ function draw(){
 
 // ---- vision ----
 function applyVision(){
-  const k = revealing ? 0 : Date.now()<squintUntil ? .5 : 1;
-  canvas.style.filter=Vision.filter(vision, k);
-  $('vignette').style.opacity=Vision.vignette(vision, k);
-  $('visionBar').style.width=vision+'%';
-  $('visionPct').textContent=Math.round(vision)+'%';
-}
-function loseVision(n){
-  vision=Vision.add(-n); applyVision();
-  if(!warned && vision<60){ warned=true; save(); setTimeout(()=>toast('Your vision is now below the arcade average.'), 1200); }
+  Wallet.see(coins);
+  canvas.classList.toggle('clear', revealing);
+  canvas.classList.toggle('squint', !revealing && Date.now()<squintUntil);
+  $('visionBar').style.width=sight()+'%';
+  $('visionPct').textContent=Math.round(sight())+'%';
 }
 
 // ---- formula bar ----
@@ -429,20 +429,20 @@ function renderSheet(){
     toast('Changing the fractal is free. The odds are the same in all of them.'); });
   if(stake>coins) stake=Math.min(10, coins);
   toggleRow($('amounts'), AMOUNTS.map(a=>{ const v=a==='All in'?coins:a; return [a, v, v>coins||v<=0]; }), stake, v=>{ stake=v; save(); });
-  const f=subtlety(stake, vision);
-  $('terms').textContent = `${BOMBS} bombs · ${clockFor(vision)} seconds · shade difference ${shadeText(f)} · losing costs ${visionCost(stake)}% vision`;
+  const f=subtlety(stake, sight());
+  $('terms').textContent = `${BOMBS} bombs · ${clockFor(sight())} seconds · shade difference ${shadeText(f)} · the less you see, the less of both`;
   const go=$('go');
-  if(coins<=0){ go.disabled=false; go.textContent='Out of coins. Back to the arcade'; go.onclick=()=>location.href='home.html'; return; }
+  if(coins<=0){ go.disabled=false; go.textContent='Out of sight. Back to the arcade'; go.onclick=()=>location.href='home.html'; return; }
   go.onclick=start;
   go.disabled = stake<=0 || stake>coins;
-  go.textContent = `Bet ${fmt(stake)} to win ${fmt(stake*MULT)}`;
+  go.textContent = `Bet ${fmt(stake)} sight to win ${fmt(stake*MULT)}`;
 }
 
 function start(){
   if(state!=='betting' || stake<=0 || !Wallet.spend(stake)) return;
   coins=Wallet.get(); rounds++; save();
   plant();
-  timeLeft=clockFor(vision); squinted=false; squintUntil=0;
+  timeLeft=clockFor(sight()); squinted=false; squintUntil=0;
   state='playing';
   $('sheet').classList.add('hidden');
   $('squintBtn').disabled = coins<SQUINT_COST;
@@ -455,7 +455,7 @@ function start(){
 function updateStatus(){
   // between rounds the bar previews the next one
   const betting=state==='betting';
-  const found=betting ? 0 : bombs.filter(b=>b.found).length, s=Math.max(0, Math.ceil(betting ? clockFor(vision) : timeLeft));
+  const found=betting ? 0 : bombs.filter(b=>b.found).length, s=Math.max(0, Math.ceil(betting ? clockFor(sight()) : timeLeft));
   if(betting) $('squintBtn').disabled=true;
   $('found').textContent=`${found}/${BOMBS}`;
   $('clock').textContent=`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
@@ -499,22 +499,23 @@ function showResult(html, ms, then){
 function win(){
   state='result'; wins++;
   const gross=stake*MULT, fee=Math.round(gross*FEE);
-  coins=Wallet.add(stake+gross-fee); vision=Vision.add(2); save(); updateHud();
+  coins=Wallet.add(stake+gross-fee); save(); updateHud();
   setFormula('', `=SUM(winnings)-booth_fee`);
   showResult(`Every bomb found<strong class="w">+${fmt(gross-fee)}</strong>
-    <small>Less a ${fmt(fee)} booth maintenance fee, charged on winnings only. Your eyes recover 2%.</small>`, 3400, endRound);
+    <small>Less a ${fmt(fee)} booth maintenance fee, charged on winnings only. Everything looks a little sharper.</small>`, 3400, endRound);
 }
 function lose(){
   state='result'; timeLeft=0; updateStatus();
-  const found=bombs.filter(b=>b.found).length, cost=visionCost(stake);
+  const found=bombs.filter(b=>b.found).length;
   const dark=bombs.find(b=>b.dark && !b.found);
   setFormula('', `=COUNTIF(${'A1:'+ref(grid.cols-1, grid.rows-1)},"bomb")`, String(BOMBS));
   // for a moment, everything is clear, so you can see how close they were
   revealing=true; canvas.classList.add('easing'); applyVision(); draw();
   const close = found===BOMBS-1 ? `<small>${found} of ${BOMBS}. One bomb away from ${fmt(stake*MULT)}!</small>` : `<small>${found} of ${BOMBS} found.</small>`;
   const note = dark ? `<small>One was in the black, ${Math.round(dark.is[0]/2.55*10)/10}% lighter than black. Technically visible.</small>` : '';
-  showResult(`Time’s up<strong class="l">−${fmt(stake)}</strong>${close}${note}<small>Your vision drops ${cost}%.</small>`, 4200, ()=>{
-    revealing=false; loseVision(cost); draw();
+  showResult(`Time’s up<strong class="l">−${fmt(stake)}</strong>${close}${note}<small>For a moment, you can see everything you bet.</small>`, 4200, ()=>{
+    revealing=false; applyVision(); draw();
+    if(!warned && sight()<60){ warned=true; save(); setTimeout(()=>toast('Your sight is now below the arcade average.'), 1200); }
     setTimeout(()=>canvas.classList.remove('easing'), 1000);
     endRound();
   });
@@ -525,11 +526,11 @@ function endRound(){
   renderSheet(); updateHud();
   $('sheet').classList.remove('hidden');
   if(coins<=0) setTimeout(broke, 500);
-  else if(rounds%3===0 && vision<90) setTimeout(()=>toast('Eye drops are back in stock.'), 800);
+  else if(rounds%3===0 && sight()<90) setTimeout(()=>toast('Sight packs are back in stock.'), 800);
 }
 
-// ---- eye care ----
-const dropPrice = () => Math.round(40*Math.pow(1.5, drops));
+// ---- shop: the arcade's sight packs, the same ones home.html sells ----
+const money = n => '$'+n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 function openModal(html, buttons){
   $('card').innerHTML=html;
   const acts=document.createElement('div'); acts.className='actions';
@@ -540,39 +541,39 @@ function openModal(html, buttons){
 }
 function closeModal(){ $('modal').hidden=true; renderSheet(); updateHud(); }
 function shop(){
-  const p=dropPrice();
-  openModal(`<h3>Eye care</h3>
-    <p>Your vision is ${Math.round(vision)}%. ${vision<60 ? 'That is below the arcade average.' : 'For now.'}</p>
-    <div class="item"><div><b>Eye drops</b><p>+5% vision. The price goes up every time you buy.</p></div>
-      <button id="buyDrops" ${coins<p||vision>=100?'disabled':''}>${fmt(p)} coins</button></div>
-    <div class="item"><div><b>Squint</b><p>Halves the blur for 5 seconds. One per round, during a round.</p></div>
-      <button disabled>${SQUINT_COST} coins</button></div>
-    <p class="fine">Prices are in coins, and coins are pretend. There’s no real money anywhere in the arcade.</p>`,
+  openModal(`<h3>Get your sight back</h3>
+    <p>You see ${Math.round(sight())}% of the sheet. ${sight()<60 ? 'That is below the arcade average.' : 'For now.'}</p>` +
+    Wallet.PACKS.map((pk,i)=>`<div class="item"><div><b>${pk.name}, ${fmt(pk.coins)}</b><p>${pk.note}</p></div>
+      <button data-i="${i}">${money(pk.price)}*</button></div>`).join('') +
+    `<div class="item"><div><b>Squint</b><p>Halves the blur for 5 seconds. One per round, during a round.</p></div>
+      <button disabled>${SQUINT_COST} sight</button></div>
+    <p class="fine">*All prices are pretend. There’s no real money, card, or checkout anywhere in the arcade.</p>`,
     [{label:'Close', onClick:closeModal}]);
-  const b=$('buyDrops');
-  if(b) b.onclick=()=>{ if(!Wallet.spend(p)) return; coins=Wallet.get(); drops++;
-    vision=Vision.add(5); save(); updateHud(); toast('+5% vision. Everything looks a little more winnable.'); shop(); };
+  $('card').querySelectorAll('.item button[data-i]').forEach(b=>b.onclick=()=>{
+    const pk=Wallet.PACKS[+b.dataset.i];
+    coins=Wallet.add(pk.coins); updateHud(); toast(`+${fmt(pk.coins)} sight. Everything looks a little more winnable.`); shop(); });
 }
-$('shopBtn').onclick=()=>{ if(state==='playing') return toast('Eye care is closed while the clock is running.'); shop(); };
+$('shopBtn').onclick=()=>{ if(state==='playing') return toast('The shop is closed while the clock is running.'); shop(); };
 $('squintBtn').onclick=()=>{
   if(state!=='playing' || squinted || !Wallet.spend(SQUINT_COST)) return;
+  // squinting costs sight, so the blur it halves is a little worse than before
   coins=Wallet.get(); squinted=true; squintUntil=Date.now()+SQUINT_MS;
   $('squintBtn').disabled=true; updateHud(); say('Squinting', 1200);
 };
 function broke(){
-  openModal(`<h3>Out of coins</h3><p>The bombs will still be here. The koi pond has coins, and opinions about how you get them.</p>`,
-    [{label:'Back to the arcade', primary:true, onClick:()=>location.href='home.html'}, {label:'Stay and look at the fractal', onClick:closeModal}]);
+  openModal(`<h3>Out of sight</h3><p>The bombs are still here. You just can’t see them, which was also true before.</p>`,
+    [{label:'Get your sight back', primary:true, onClick:shop}, {label:'Back to the arcade', onClick:()=>location.href='home.html'}]);
 }
 $('howBtn').onclick=()=>openModal(`<h3>How it works</h3>
   <p>${BOMBS} cells in the sheet are a shade off from where the fractal says they should be. Tap each one before the clock runs out.</p>
-  <p>A wrong cell costs ${MISS_PENALTY} seconds. Find all ${BOMBS} and win ${MULT}× your stake, less a booth fee.</p>
-  <p>Lose, and your vision drops. Less vision means a blurrier sheet, a shorter clock, and fainter bombs, in this game and the next.</p>
+  <p>You bet sight. A wrong cell costs ${MISS_PENALTY} seconds. Find all ${BOMBS} and win ${MULT}× your stake, less a booth fee.</p>
+  <p>The less sight you have, the blurrier the sheet, the shorter the clock, and the fainter the bombs, in this game and every other one.</p>
   <p class="fine">Bigger stakes hide the bombs better. One bomb is always somewhere very dark. Seconds are house seconds, which are ${Math.round((HOUSE_SECOND-1)*100)}% shorter. Rounds played: ${rounds}. Rounds won: ${wins}.</p>`,
   [{label:'Got it', primary:true, onClick:closeModal}]);
 $('footBtn').onclick=()=>openModal(`<h3>Play responsibly</h3>
-  <p>Vision here is a number saved in your browser. Your actual eyes are fine.</p>
+  <p>Sight here is a number saved in your browser. Your actual eyes are fine.</p>
   <p class="fine">This game does not offer real money gambling, and does not predict success at real money gambling.</p>`,
-  [{label:'Reset my vision to 100%', primary:true, onClick:()=>{ vision=100; Vision.set(100); closeModal(); toast('Vision reset. It was always just a number.'); }},
+  [{label:'Start over with fresh eyes', primary:true, onClick:()=>location.href='home.html?fresh'},
    {label:'Close', onClick:closeModal}]);
 $('modal').addEventListener('click', e=>{ if(e.target===$('modal')) closeModal(); });
 
@@ -597,8 +598,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape' && !$('modal').hidden) clos
 new ResizeObserver(()=>{ measure(); if(!grid) newBoard(); else draw(); }).observe($('wrap'));
 const matchDark=matchMedia('(prefers-color-scheme: dark)'); matchDark.addEventListener('change', draw);
 Wallet.onChange(n=>{ coins=n; updateHud(); if(state==='betting') renderSheet(); });
-Vision.onChange(v=>{ vision=v; updateHud(); if(state==='betting') renderSheet(); });
-addEventListener('pageshow', ()=>{ coins=Wallet.get(); vision=Vision.get(); updateHud(); if(state==='betting') renderSheet(); });
+addEventListener('pageshow', ()=>{ coins=Wallet.get(); updateHud(); if(state==='betting') renderSheet(); });
 
 // ---- boot ----
 load();
