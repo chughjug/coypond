@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Arcade</title>
+<style>
+  :root {
+    --grass: #9cbf7a; --grass-deep: #7fa65e; --path: #e3d3a8; --path-edge: #c9b582;
+    --water: #7fb3a3; --water-deep: #4f8a7c;
+    --ink: #173430; --caption: rgba(23,52,48,.75);
+    --sheet: #f3efe2; --line: rgba(23,52,48,.18);
+    --accent: #c9461a; --accent-ink: #fff; --gold: #a87a12; --coin: #e8b83a;
+    --wood: #8a5a34; --wood-dark: #6b4426; --hazard: #f2c230;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --grass: #2c4426; --grass-deep: #22371d; --path: #5a5038; --path-edge: #463e2b;
+      --water: #1f3f3a; --water-deep: #0f2724;
+      --ink: #e6efe9; --caption: rgba(230,239,233,.7);
+      --sheet: #1b2a22; --line: rgba(230,239,233,.16);
+      --accent: #e8692c; --accent-ink: #1a0d06; --gold: #e6c35c; --coin: #d9a92c;
+      --wood: #6b4426; --wood-dark: #4a2e19; --hazard: #c99d1e;
+      color-scheme: dark;
+    }
+  }
+  html, body { margin:0; height:100%; overflow:hidden; background:var(--grass-deep); color:var(--ink);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif; -webkit-tap-highlight-color:transparent; }
+  button, a { font:inherit; color:inherit; }
+  button:focus-visible, a:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+  .world { position:fixed; inset:0; touch-action:none; cursor:pointer; user-select:none;
+    background:
+      radial-gradient(circle at 15% 20%, rgba(255,255,255,.08) 0 40px, transparent 41px),
+      radial-gradient(circle at 85% 75%, rgba(255,255,255,.06) 0 60px, transparent 61px),
+      radial-gradient(ellipse at 50% 50%, var(--grass) 0%, var(--grass-deep) 100%); }
+  .paths { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+  .paths path { fill:none; stroke-linecap:round; stroke-linejoin:round; }
+
+  .hud { position:fixed; top:max(12px,env(safe-area-inset-top)); left:18px; right:18px; z-index:5;
+    display:flex; justify-content:space-between; align-items:flex-start; pointer-events:none; }
+  .purse b { font-size:28px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .purse .unit { font-size:16px; margin-left:6px; }
+  .purse p { margin:2px 0 0; font-size:13px; color:var(--caption); }
+  .title { margin:0; font-size:15px; font-style:italic; color:var(--caption); text-align:right; }
+
+  .station { position:absolute; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center;
+    gap:6px; background:none; border:0; padding:0; text-decoration:none; }
+  .station .label { font-size:15px; font-weight:600; padding:3px 10px; border-radius:10px; background:var(--sheet);
+    box-shadow:0 1px 0 var(--line); white-space:nowrap; }
+  .station .soon { display:block; font-size:11px; font-weight:400; color:var(--accent); text-align:center; letter-spacing:.06em; text-transform:uppercase; }
+  .station.near .label { outline:2px solid var(--accent); }
+  .station svg { display:block; overflow:visible; }
+
+  .walker { position:absolute; width:30px; height:30px; margin:-15px 0 0 -15px; border-radius:50%; z-index:3; pointer-events:none;
+    background:radial-gradient(circle at 35% 30%, #fff6 0 4px, transparent 5px), var(--coin);
+    box-shadow:inset 0 0 0 3px var(--gold), 0 4px 0 rgba(0,0,0,.18); }
+  .walker::before, .walker::after { content:''; position:absolute; top:11px; width:4px; height:6px; border-radius:2px; background:#3a2a08; }
+  .walker::before { left:9px; } .walker::after { right:9px; }
+  .walker.step { animation:bob .28s infinite alternate; }
+  @keyframes bob { from { translate:0 0; } to { translate:0 -3px; } }
+
+  .hint { position:fixed; left:0; right:0; bottom:max(16px,env(safe-area-inset-bottom)); text-align:center;
+    font-style:italic; font-size:14px; color:var(--caption); pointer-events:none; margin:0; }
+
+  .panel { position:fixed; left:50%; bottom:max(16px,env(safe-area-inset-bottom)); z-index:6;
+    width:min(420px, calc(100vw - 32px)); box-sizing:border-box; padding:16px 18px; border-radius:18px;
+    background:var(--sheet); box-shadow:0 10px 30px rgba(0,0,0,.25);
+    transform:translate(-50%, calc(100% + 40px)); transition:transform .25s ease; }
+  .panel.show { transform:translate(-50%, 0); }
+  .panel h2 { margin:0 0 4px; font-size:22px; }
+  .panel p { margin:0 0 12px; font-size:15px; opacity:.85; }
+  .panel .acts { display:flex; gap:8px; }
+  .panel .acts > * { flex:1; text-align:center; padding:12px; border-radius:12px; font-size:16px; text-decoration:none;
+    border:1.5px solid var(--line); background:transparent; cursor:pointer; }
+  .panel .primary { background:var(--accent); color:var(--accent-ink); border-color:transparent; font-weight:600; }
+  .panel .primary[aria-disabled="true"] { opacity:.45; pointer-events:none; }
+
+  .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+  @media (prefers-reduced-motion: reduce) { .panel { transition:none; } .walker.step { animation:none; } }
+</style>
+</head>
+<body>
+<header class="hud">
+  <div class="purse">
+    <b id="coins">100</b><span class="unit">coins</span>
+    <p>One purse, every game.</p>
+  </div>
+  <p class="title">The Arcade</p>
+</header>
+
+<main class="world" id="world" aria-label="Arcade grounds">
+  <svg class="paths" id="paths" aria-hidden="true"></svg>
+
+  <a class="station" id="st-coypond" href="index.html" data-id="coypond">
+    <svg width="110" height="74" viewBox="-55 -37 110 74" aria-hidden="true">
+      <ellipse rx="54" ry="34" fill="var(--water-deep)"/>
+      <ellipse rx="48" ry="29" fill="var(--water)"/>
+      <g class="koi"><ellipse cx="-14" cy="-6" rx="11" ry="4.5" fill="#f2ede3"/><circle cx="-18" cy="-7" r="2.6" fill="#e2552a"/><path d="M-3 -6 l6 -4 v8z" fill="#f2ede3"/></g>
+      <g class="koi2"><ellipse cx="14" cy="9" rx="10" ry="4" fill="#f08a2c"/><path d="M3 9 l-6 -4 v8z" fill="#f08a2c"/></g>
+      <ellipse cx="28" cy="-14" rx="9" ry="6" fill="#5e8f3e"/>
+    </svg>
+    <span class="label">Koi Pond Stakes</span>
+  </a>
+
+  <a class="station" id="st-game-2" href="game-2.html" data-id="game-2">
+    <svg width="90" height="80" viewBox="-45 -40 90 80" aria-hidden="true">
+      <rect x="-34" y="-12" width="68" height="46" rx="3" fill="var(--wood)"/>
+      <path d="M-42 -10 L0 -38 L42 -10 Z" fill="var(--wood-dark)"/>
+      <rect x="-12" y="8" width="24" height="26" fill="var(--wood-dark)"/>
+      <g><rect x="-40" y="2" width="80" height="9" fill="var(--hazard)" transform="rotate(-8)"/>
+        <path d="M-34 2 l6 9 M-20 2 l6 9 M-6 2 l6 9 M8 2 l6 9 M22 2 l6 9" stroke="#222" stroke-width="4" transform="rotate(-8)"/></g>
+    </svg>
+    <span class="label">Mystery booth<span class="soon">Coming soon</span></span>
+  </a>
+
+  <a class="station" id="st-game-3" href="game-3.html" data-id="game-3">
+    <svg width="90" height="80" viewBox="-45 -40 90 80" aria-hidden="true">
+      <path d="M-36 34 V-6 a36 30 0 0 1 72 0 V34 Z" fill="var(--wood)"/>
+      <path d="M-36 -6 a36 30 0 0 1 72 0" fill="none" stroke="var(--wood-dark)" stroke-width="6"/>
+      <circle cy="6" r="13" fill="var(--wood-dark)"/>
+      <text y="12" text-anchor="middle" font-size="18" font-weight="700" fill="var(--hazard)" font-family="Georgia,serif">?</text>
+      <g><rect x="-40" y="18" width="80" height="9" fill="var(--hazard)" transform="rotate(7)"/>
+        <path d="M-34 18 l6 9 M-20 18 l6 9 M-6 18 l6 9 M8 18 l6 9 M22 18 l6 9" stroke="#222" stroke-width="4" transform="rotate(7)"/></g>
+    </svg>
+    <span class="label">Locked tent<span class="soon">Coming soon</span></span>
+  </a>
+
+  <div class="walker" id="walker" aria-hidden="true"></div>
+</main>
+
+<p class="hint" id="hint">Tap a game to play, or tap anywhere to walk around.</p>
+
+<section class="panel" id="panel" aria-live="polite">
+  <h2 id="pTitle"></h2>
+  <p id="pDesc"></p>
+  <div class="acts" id="pActs"></div>
+</section>
+
+<script src="wallet.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const fmt = n => Math.floor(n).toLocaleString('en-US');
+
+// Add a game: give it its own .html file, a station in the markup, and an entry here.
+const GAMES = [
+  { id:'game-2', file:'game-2.html', name:'Mystery booth', ready:false,
+    desc:'Something is being built behind the tape. Your coins will work here too.' },
+  { id:'coypond', file:'index.html', name:'Koi Pond Stakes', ready:true,
+    desc:'Bet on which koi eats the pellet first. Coins you win come back to the arcade with you.' },
+  { id:'game-3', file:'game-3.html', name:'Locked tent', ready:false,
+    desc:'The flap is tied shut. A sign says “soon,” and has said so for a while.' },
+];
+const HUB='arcade.hub.v1', NEAR=70, SPEED=4.2, STAND=82; // STAND: how far below a station you stand
+
+let W, H, stations={}, gate={x:0,y:0};
+const me = {x:0, y:0, tx:null, ty:null};
+const keys = new Set();
+
+function layout(){
+  W=innerWidth; H=innerHeight;
+  const wide = W > H*1.1;
+  // spots are fractions of the screen; tall screens stack the games up a winding path
+  const spots = wide
+    ? [[.2,.45],[.5,.32],[.8,.45]]
+    : [[.27,.62],[.5,.3],[.73,.62]];
+  gate = wide ? {x:W*.5, y:H*.8} : {x:W*.5, y:H*.86};
+  GAMES.forEach((g,i)=>{
+    const el=$('st-'+g.id), [fx,fy]=spots[i];
+    stations[g.id]={g, el, x:W*fx, y:H*fy};
+    el.style.left=W*fx+'px'; el.style.top=H*fy+'px';
+  });
+  drawPaths();
+}
+
+function drawPaths(){
+  const d = Object.values(stations).map(s=>{
+    const mx=(gate.x+s.x)/2 + (s.x-gate.x)*.15, my=(gate.y+s.y)/2 + 30;
+    return `M${gate.x} ${gate.y} Q${mx} ${my} ${s.x} ${s.y+30}`;
+  }).join(' ');
+  $('paths').innerHTML =
+    `<path d="${d}" stroke="var(--path-edge)" stroke-width="30"/>` +
+    `<path d="${d}" stroke="var(--path)" stroke-width="24"/>` +
+    `<circle cx="${gate.x}" cy="${gate.y}" r="26" fill="var(--path)" stroke="var(--path-edge)" stroke-width="3"/>`;
+}
+
+function place(){ const w=$('walker'); w.style.left=me.x+'px'; w.style.top=me.y+'px'; }
+
+function standAt(id){
+  const s=stations[id];
+  if(s){ me.x=s.x; me.y=s.y+STAND; } else { me.x=gate.x; me.y=gate.y; }
+  place();
+}
+
+function walkTo(x, y){
+  if(reduceMotion){ me.x=x; me.y=y; me.tx=null; place(); return; }
+  me.tx=x; me.ty=y;
+}
+
+function nearest(){
+  let best=null, bd=Infinity;
+  for(const id in stations){ const s=stations[id], d=Math.hypot(s.x-me.x, s.y+STAND-me.y);
+    if(d<bd){ bd=d; best=id; } }
+  return bd<NEAR ? best : null;
+}
+
+let shown=null;
+function showPanel(id){
+  if(id===shown) return;
+  shown=id;
+  for(const k in stations) stations[k].el.classList.toggle('near', k===id);
+  const p=$('panel');
+  if(!id){ p.classList.remove('show'); $('hint').hidden=false; return; }
+  const g=stations[id].g;
+  $('pTitle').textContent=g.name;
+  $('pDesc').textContent=g.desc;
+  $('pActs').innerHTML = g.ready
+    ? `<a class="primary" href="${g.file}">Enter</a>`
+    : `<a class="primary" aria-disabled="true" tabindex="-1">Coming soon</a><a href="${g.file}">Peek inside</a>`;
+  p.classList.add('show'); $('hint').hidden=true;
+}
+
+function remember(id){ try{ localStorage.setItem(HUB, JSON.stringify({at:id})); }catch(e){} }
+function recall(){ try{ return (JSON.parse(localStorage.getItem(HUB)||'null')||{}).at; }catch(e){ return null; } }
+
+function tick(){
+  let dx=0, dy=0;
+  if(keys.has('ArrowLeft')||keys.has('a')) dx--;
+  if(keys.has('ArrowRight')||keys.has('d')) dx++;
+  if(keys.has('ArrowUp')||keys.has('w')) dy--;
+  if(keys.has('ArrowDown')||keys.has('s')) dy++;
+  let moving=false;
+  if(dx||dy){
+    me.tx=null;
+    const l=Math.hypot(dx,dy); me.x+=dx/l*SPEED; me.y+=dy/l*SPEED; moving=true;
+  } else if(me.tx!==null){
+    const vx=me.tx-me.x, vy=me.ty-me.y, l=Math.hypot(vx,vy);
+    if(l<=SPEED){ me.x=me.tx; me.y=me.ty; me.tx=null; }
+    else { me.x+=vx/l*SPEED; me.y+=vy/l*SPEED; moving=true; }
+  }
+  me.x=Math.max(15, Math.min(W-15, me.x));
+  me.y=Math.max(80, Math.min(H-15, me.y));
+  $('walker').classList.toggle('step', moving);
+  place();
+  const n=nearest(); showPanel(n);
+  if(n && !moving) remember(n);
+  requestAnimationFrame(tick);
+}
+
+// ---- input ----
+$('world').addEventListener('click', e=>{
+  // stations are plain links: clicking one goes straight to its game
+  const st=e.target.closest('.station');
+  if(st) return remember(st.dataset.id);
+  if(e.target.closest('.panel')) return;
+  walkTo(e.clientX, e.clientY);
+});
+const MOVE=['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','a','d','w','s'];
+addEventListener('keydown', e=>{
+  if(e.target.closest && e.target.closest('input,textarea')) return;
+  const k=e.key.length===1 ? e.key.toLowerCase() : e.key;
+  if(MOVE.includes(k)){ keys.add(k); e.preventDefault(); }
+  if((k==='Enter'||k===' ') && shown && document.activeElement===document.body){
+    e.preventDefault();
+    remember(shown); location.href = stations[shown].g.file;
+  }
+});
+addEventListener('keyup', e=>keys.delete(e.key.length===1 ? e.key.toLowerCase() : e.key));
+addEventListener('blur', ()=>keys.clear());
+addEventListener('resize', ()=>{ layout(); if(me.tx===null && shown) standAt(shown); });
+
+// ---- purse ----
+function showCoins(n){ $('coins').textContent=fmt(n); }
+showCoins(Wallet.get());
+Wallet.onChange(showCoins);
+// coming back from a game with the back button can restore this page from cache
+addEventListener('pageshow', ()=>showCoins(Wallet.get()));
+
+// ---- boot ----
+layout();
+standAt(recall());
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

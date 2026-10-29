@@ -27,12 +27,12 @@
   <h1>Mystery booth</h1>
   <p>Something is being built behind the tape. Coming soon.</p>
   <p class="purse">Your arcade purse: <b id="coins">…</b> coins</p>
-  <a href="../index.html">Back to the arcade</a>
+  <a href="home.html">Back to the arcade</a>
 </main>
-<script src="../shared/wallet.js"></script>
+<script src="wallet.js"></script>
 <script>
 // When this game is built: read coins with Wallet.get(), and write them back with
-// Wallet.set(n) / Wallet.add(n) / Wallet.spend(n). See shared/wallet.js.
+// Wallet.set(n) / Wallet.add(n) / Wallet.spend(n). See wallet.js.
 document.getElementById('coins').textContent = Wallet.get().toLocaleString('en-US');
 </script>
 </body>
