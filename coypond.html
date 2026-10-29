@@ -102,12 +102,30 @@
     background:rgba(0,0,0,.55); padding:1px 5px; border-radius:8px; white-space:nowrap; font-variant-numeric:tabular-nums; }
   .rack { display:flex; align-items:center; justify-content:center; gap:12px; margin:8px 0 10px; padding:10px 12px;
     border-radius:14px; background:linear-gradient(#6b3f1f, #4b2b14); box-shadow:inset 0 2px 6px rgba(0,0,0,.45); }
-  .rack .vpchip { --size:46px; border:0; padding:0; cursor:pointer; }
+  .rack .vpchip { --size:54px; border:0; padding:0; cursor:pointer; }
   .rack .vpchip:disabled { opacity:.35; cursor:default; }
   .rack .vpchip:active { transform:translateY(2px); }
   .rack .racktext { padding:7px 10px; border-radius:10px; border:1.5px solid rgba(243,239,230,.5); background:transparent;
     color:#f3efe6; font-size:13px; }
   .rack .racktext:disabled { opacity:.35; }
+
+  /* the cookie wall's poker table */
+  .uth { margin:10px 0; padding:12px 10px; border-radius:18px; background:radial-gradient(ellipse at 50% 40%, #2f9460, #124a2b 80%);
+    box-shadow:inset 0 0 0 5px #6b3f1f, inset 0 0 0 7px #a8742f; color:#f3efe6; }
+  .uthrow { display:flex; align-items:center; justify-content:center; gap:5px; min-height:52px; margin:4px 0; }
+  .uthrow small { width:46px; font-size:11px; opacity:.75; text-align:right; margin-right:4px; }
+  .uthrow.board { padding-left:50px; }
+  .pcard { display:inline-grid; place-items:center; width:34px; height:48px; border-radius:5px; background:#fbf8f1; color:#1d1d1f;
+    font:700 15px/1 system-ui,-apple-system,"Segoe UI",sans-serif; box-shadow:0 2px 3px rgba(0,0,0,.4); }
+  .pcard.red { color:#c43a2c; }
+  .pcard.back { background:repeating-linear-gradient(45deg,#1f4fa0 0 4px,#fbf3e4 4px 6px); }
+  .uthbets { display:flex; justify-content:space-around; margin-top:8px; padding-top:38px; }
+  .uthbets div { position:relative; display:flex; flex-direction:column; align-items:center; width:60px; font-size:12px; }
+  .uthbets span { order:2; opacity:.8; margin-top:4px; }
+  .uthbets i { font-style:normal; opacity:.4; }
+  .uthbets .stack { bottom:100%; }
+  .uthrack { margin:4px 0 0; }
+  .uthrack .vpchip { --size:44px; }
 
   /* Vision Point chips, from the "poker chip design" file (renamed: .chip is already the HUD's) */
   .vpchip { --size:120px; --base:#c43a2c; --stripe:#fbf3e4; --face:#fbf3e4; --txt:#a12c20; --edge:#7a1f17;
@@ -126,6 +144,10 @@
   .vpchip.vp1  { --base:#e9e4d8; --stripe:#2f6db5; --face:#fbf8f1; --txt:#24486f; --edge:#a8a294; }
   .vpchip.vp5  { --base:#c43a2c; --stripe:#fbf3e4; --face:#fbf3e4; --txt:#a12c20; --edge:#7a1f17; }
   .vpchip.vp10 { --base:#1f4fa0; --stripe:#fbf3e4; --face:#fbf3e4; --txt:#1b4189; --edge:#122f61; }
+  /* the bigger denominations, in the same construction */
+  .vpchip.vp25  { --base:#2f7d46; --stripe:#fbf3e4; --face:#fbf3e4; --txt:#22603a; --edge:#1a4a2b; }
+  .vpchip.vp100 { --base:#1d1d1f; --stripe:#e9e4d8; --face:#fbf8f1; --txt:#1d1d1f; --edge:#000; }
+  .vpchip.vp500 { --base:#6b3fa0; --stripe:#fbf3e4; --face:#fbf3e4; --txt:#53307d; --edge:#3e2260; }
   .stack .vpchip b { font-size:calc(var(--size) * .34); }
   .stack .vpchip i { display:none; }
   .swatch { width:34px; height:14px; border-radius:7px; position:relative; overflow:hidden; }
@@ -380,12 +402,12 @@ const PATTERNS = [
 function lerpAngle(a,b,t){ const d=((b-a+Math.PI)%TAU+TAU)%TAU-Math.PI; return a+d*t; }
 
 // ---- economy ----
-let coins=100, gems=0, pellets=5, wins=0, losses=0, credit=0, scales=0;
+let coins=100, gems=0, wins=0, losses=0, credit=0, scales=0;
 let luckyOwned=0, useLucky=false, luckyThisRace=false, vip=false, insured=false, gemPrice=10, lossStreak=0;
-const MAX_PELLETS=5, REST_AT=12, hats={}, feeds={};
-let refillAt=Date.now()+4*3600e3;
+const REST_AT=12, hats={}, feeds={};
+let betsSinceHand=0;  // the cookie wall comes down every few bets
 let mode='single', legs=3, parlay=null, boosted=false;
-let pick=null, stake=10, state='betting', fixed='lose'; // betting | armed | racing | result
+let pick=null, stake=25, state='betting', fixed='lose'; // betting | armed | racing | result
 const WIN_RATE=0.1;          // the real one
 const SHOWN_RATE_NOTE='up to 98%';  // the other one
 let spent=0, whale=false, firstBuy=true, club=false, clubPrice=9.99, clubTimer=null;
@@ -402,15 +424,14 @@ let consent=false, agreed=false, sound=true, oddsFmt='frac', abGroup='B';
 let referrals=0, declines=7, audio=null, pushTimer=null;
 const money = n => '$'+n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 const PACKS=Wallet.PACKS;  // the same packs the shop on home.html sells
-const CHIPS=[1,5,10];  // Vision Points. 1 VP is 1 point of sight
+const CHIPS=[5,25,100,500];  // Vision Points. 1 VP is 1 point of sight
 
 // ---- save file (the sunk cost is the product) ----
 const SAVE='koipondstakes.v1';
 function save(){
   Wallet.set(coins);
-  if(squinting) Wallet.see(Wallet.START);  // Wallet.set re-applies the real blur
   try { localStorage.setItem(SAVE, JSON.stringify({
-    coins, gems, pellets, wins, losses, credit, scales, luckyOwned, vip, gemPrice, lossStreak, refillAt,
+    coins, gems, wins, losses, credit, scales, luckyOwned, vip, gemPrice, lossStreak, betsSinceHand,
     spent, whale, firstBuy, club, clubPrice, turboOwned, races, pity, dupProt, creditExpires, streakDay,
     limitSet, rivalScore, hats, feeds, departed, season, quests, questDay, tierPoints, consent, agreed,
     sound, oddsFmt, abGroup, referrals, declines, sinceAd, squints, lastSeen:Date.now() })); } catch(e){}
@@ -420,10 +441,10 @@ function load(){
   let d; try { d=JSON.parse(localStorage.getItem(SAVE)||'null'); } catch(e){}
   if(!d) return false;
   const num=(v,f)=>typeof v==='number' && isFinite(v) ? v : f;
-  gems=num(d.gems,gems); pellets=num(d.pellets,pellets);
+  gems=num(d.gems,gems); betsSinceHand=num(d.betsSinceHand,betsSinceHand);
   wins=num(d.wins,wins); losses=num(d.losses,losses); credit=num(d.credit,credit); scales=num(d.scales,scales);
   luckyOwned=num(d.luckyOwned,luckyOwned); gemPrice=num(d.gemPrice,gemPrice); lossStreak=num(d.lossStreak,lossStreak);
-  refillAt=num(d.refillAt,refillAt); spent=num(d.spent,spent); clubPrice=num(d.clubPrice,clubPrice);
+  spent=num(d.spent,spent); clubPrice=num(d.clubPrice,clubPrice);
   races=num(d.races,races); pity=num(d.pity,pity); creditExpires=num(d.creditExpires,creditExpires);
   streakDay=num(d.streakDay,streakDay); rivalScore=num(d.rivalScore,rivalScore);
   vip=!!d.vip; whale=!!d.whale; firstBuy=d.firstBuy!==false; club=!!d.club;
@@ -441,9 +462,9 @@ function load(){
   if(typeof d.abGroup==='string') abGroup=d.abGroup;
   return true;
 }
-// stranded gems: packs come in tens, everything costs threes and fives
+// stranded cookies: hands pay out in ones and threes, everything costs threes and fives
 function strand(){
-  if(gems>0 && gems<3){ scales += gems*20; toast(`${gems} stranded ${gems===1?'gem':'gems'} converted to ${gems*20} Koi Scales.`); gems=0; }
+  if(gems>0 && gems<3){ scales += gems*20; toast(`${gems} stranded ${gems===1?'cookie':'cookies'} converted to ${gems*20} Koi Scales.`); gems=0; }
 }
 function spendGems(n){ gems-=n; strand(); }
 class Koi {
@@ -638,7 +659,7 @@ function renderSheet(){
 
   const extras=[];
   if(luckyOwned>0) extras.push([`Lucky pellet (${luckyOwned})`,'lucky']);
-  if(mode==='parlay') extras.push(['Insurance, 2 gems','ins', gems<2 && !insured]);
+  if(mode==='parlay') extras.push(['Insurance, 2 cookies','ins', gems<2 && !insured]);
   if(mode==='single') extras.push(['Boosted odds!','boost']);
   if(turboOwned) extras.push(['Turbo pond','turbo']);
   const on=[]; if(useLucky) on.push('Lucky pellet'); if(insured) on.push('Insurance');
@@ -678,9 +699,122 @@ function renderSheet(){
     : `Bet ${fmt(cost)} on ${pick.name} to win ${fmt(Math.round(stake*pick.odds*boostMult()))}`;
   syncToast();
 }
+// ---- the cookie wall: every few bets the site needs you to accept its cookies, at a poker table ----
+const HAND_EVERY=5;
+function cookieWall(then){
+  openModal(`<h3>This pond uses cookies</h3>
+    <p>To keep feeding the koi, accept our cookies. Cookies are accepted by playing one hand of Ultimate Texas Hold’em for sight.</p>
+    <p class="fine">Every hand pays out cookies, win or lose. This is the only place cookies come from.</p>`, [
+    {label:'Accept all (deal me in)', primary:true, onClick:()=>uthHand(then)},
+    {label:'Manage preferences', onClick:()=>openModal(`<h3>Cookie preferences</h3>
+        <div class="kv"><div><span>Essential cookies<p>Required to place bets. Requires a hand of poker.</p></span><span>on</span></div>
+        <div><span>Hold’em cookies<p>Same as essential.</p></span><span>on</span></div></div>`,
+      [{label:'Save and deal me in', primary:true, onClick:()=>uthHand(then)}])},
+    {label:'Reject all', tiny:true, onClick:()=>{ toast('Rejecting cookies also requires a hand of poker.'); uthHand(then); }}]);
+}
+
+// Ultimate Texas Hold'em, against the house. Ante and Blind go down together; you may Play 4x or 3x before the flop,
+// 2x on the flop, or 1x on the river (or fold). The dealer needs a pair to qualify; if not, the Ante pushes.
+// The Blind only pays on a straight or better.
+const RANKS='23456789TJQKA', SUITS='♠♥♦♣';
+const BLIND_PAYS={8:500, 7.5:50, 7:10, 6:3, 5:1.5, 4:1}; // 8 = royal flush, 7.5 = straight flush
+const HAND_NAMES=['High card','Pair','Two pair','Three of a kind','Straight','Flush','Full house','Four of a kind','Straight flush'];
+function score5(cs){
+  const r=cs.map(c=>c.r).sort((a,b)=>b-a), flush=cs.every(c=>c.s===cs[0].s);
+  const cnt={}; r.forEach(x=>cnt[x]=(cnt[x]||0)+1);
+  const groups=Object.entries(cnt).map(([k,v])=>[v,+k]).sort((a,b)=>b[0]-a[0]||b[1]-a[1]);
+  const uniq=[...new Set(r)]; let hi=0;
+  if(uniq.length===5){ if(r[0]-r[4]===4) hi=r[0]; else if(r[0]===14 && r[1]===5) hi=5; }
+  if(hi && flush) return [8, hi];
+  if(groups[0][0]===4) return [7, groups[0][1], groups[1][1]];
+  if(groups[0][0]===3 && groups[1][0]===2) return [6, groups[0][1], groups[1][1]];
+  if(flush) return [5, ...r];
+  if(hi) return [4, hi];
+  if(groups[0][0]===3) return [3, ...groups.map(g=>g[1])];
+  if(groups[0][0]===2 && groups[1][0]===2) return [2, ...groups.map(g=>g[1])];
+  if(groups[0][0]===2) return [1, ...groups.map(g=>g[1])];
+  return [0, ...r];
+}
+const cmpScore=(a,b)=>{ for(let i=0;i<Math.max(a.length,b.length);i++){ const d=(a[i]||0)-(b[i]||0); if(d) return d; } return 0; };
+function best7(cs){
+  let best=null;
+  for(let a=0;a<7;a++) for(let b=a+1;b<7;b++){
+    const sc=score5(cs.filter((_,i)=>i!==a && i!==b)); if(!best || cmpScore(sc,best)>0) best=sc; }
+  return best;
+}
+const cardHtml = c => c ? `<span class="pcard ${c.s===1||c.s===2?'red':''}">${RANKS[c.r-2].replace('T','10')}${SUITS[c.s]}</span>` : `<span class="pcard back"></span>`;
+function uthHand(then){
+  const h={ante:0, play:0, stage:'ante', shown:0};
+  const minAnte=5;
+  const table = () => `<div class="uth">
+      <div class="uthrow"><small>Dealer</small>${h.stage==='done' ? h.d.map(cardHtml).join('') : cardHtml()+cardHtml()}</div>
+      <div class="uthrow board">${[0,1,2,3,4].map(i=>i<h.shown?cardHtml(h.board[i]):cardHtml()).join('')}</div>
+      <div class="uthrow"><small>You</small>${h.p ? h.p.map(cardHtml).join('') : cardHtml()+cardHtml()}</div>
+      <div class="uthbets">${[['Ante',h.ante],['Blind',h.ante],['Play',h.play]].map(([k,v])=>
+        `<div><span>${k}</span>${v?stackHtml(v):'<i>—</i>'}</div>`).join('')}</div></div>`;
+  function anteStage(){
+    const max=Math.floor(coins/6);  // room for the Ante, the Blind and a 4x Play
+    openModal(`<h3>Ultimate Texas Hold’em</h3>
+      <p class="fine">Put down an Ante. The Blind matches it. You have ${fmt(coins)} sight.</p>${table()}
+      <div class="rack uthrack">${CHIPS.map(d=>`<button class="vpchip vp${d}" data-d="${d}" ${h.ante+d>max?'disabled':''}><b>${d}</b><i>VP</i></button>`).join('')}
+        <button class="racktext" data-clear ${h.ante?'':'disabled'}>Clear</button></div>
+      ${max<minAnte?'<p class="fine">You cannot cover an Ante. The house will deal you in for nothing, and keep the cookies small.</p>':''}`, [
+      {label: h.ante ? `Deal (Ante ${fmt(h.ante)} + Blind ${fmt(h.ante)})` : (max<minAnte ? 'Deal me in for free' : `Ante at least ${minAnte}`),
+        primary:true, disabled: !h.ante && max>=minAnte, onClick:deal}]);
+    $('card').querySelectorAll('.uthrack .vpchip').forEach(b=>b.onclick=()=>{ h.ante+=+b.dataset.d; tone(900,.03,'square',.02); anteStage(); });
+    const c=$('card').querySelector('[data-clear]'); if(c) c.onclick=()=>{ h.ante=0; anteStage(); };
+  }
+  function deal(){
+    const deck=[]; for(let r=2;r<=14;r++) for(let s=0;s<4;s++) deck.push({r,s});
+    for(let i=deck.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [deck[i],deck[j]]=[deck[j],deck[i]]; }
+    h.p=deck.slice(0,2); h.d=deck.slice(2,4); h.board=deck.slice(4,9);
+    coins-=h.ante*2; updateHud(); save(); tone(660,.05,'triangle',.04);
+    street('pre');
+  }
+  function street(st){
+    h.stage=st; h.shown = st==='pre' ? 0 : st==='flop' ? 3 : 5;
+    const opts = st==='pre' ? [4,3] : st==='flop' ? [2] : [1];
+    const btns = opts.map(m=>({label:`Play ${m}x (${fmt(h.ante*m)})`, primary:m===opts[0], disabled:h.ante*m>coins, onClick:()=>play(m)}));
+    if(st==='pre')  btns.push({label:'Check', onClick:()=>street('flop')});
+    if(st==='flop') btns.push({label:'Check', onClick:()=>street('river')});
+    if(st==='river')btns.push({label:'Fold', onClick:()=>showdown(true)});
+    const hint = st==='pre' ? 'Bet big now, or wait and pay less to see more.' : st==='flop' ? 'Three cards are out. Bet 2x, or check to see the rest.' : 'Every card is out. Bet 1x or fold.';
+    openModal(`<h3>Ultimate Texas Hold’em</h3><p class="fine">${hint}</p>${table()}`, btns);
+  }
+  function play(m){ h.play=h.ante*m; coins-=h.play; updateHud(); save(); showdown(false); }
+  function showdown(folded){
+    h.stage='done'; h.shown=5;
+    const ps=best7([...h.p,...h.board]), ds=best7([...h.d,...h.board]), qual=ds[0]>=1, c=cmpScore(ps,ds);
+    let back=0, verdict, won=false;
+    if(folded){ verdict='You folded. The Ante and Blind stay on the felt.'; }
+    else if(c>0){
+      won=true;
+      const cat = ps[0]===8 && ps[1]===14 ? 8 : ps[0]===8 ? 7.5 : ps[0];
+      const blindPay = BLIND_PAYS[cat] || 0;
+      back = h.play*2 + (qual ? h.ante*2 : h.ante) + h.ante + Math.round(h.ante*blindPay);
+      verdict=`You win with ${HAND_NAMES[ps[0]].toLowerCase()}.${qual?'':' The dealer did not qualify, so the Ante pushes.'}${blindPay?` The Blind pays ${blindPay}:1.`:''}`;
+    } else if(c===0){ back=h.ante*2+h.play; verdict='A tie. Everything pushes.'; }
+    else { back = qual ? 0 : h.ante; verdict=`The dealer wins with ${HAND_NAMES[ds[0]].toLowerCase()}.${qual?'':' The dealer did not qualify, so your Ante comes back.'}`; }
+    const staked=h.ante*2+h.play, net=back-staked, got = !h.ante ? 1 : won ? 3 : c===0 ? 2 : 1;
+    coins+=back; gems+=got; wins+=won?1:0; losses+=net<0?1:0; betsSinceHand=0;
+    if(won){ celebrate(); fanfare(); } else tone(220,.25,'sawtooth',.04,-80);
+    updateHud(); save();
+    openModal(`<h3>${won?'You win the hand':c===0?'Push':'House wins'}</h3>${table()}
+      <p>${verdict}</p><div class="receipt">
+        <div><span>Your hand</span><span>${HAND_NAMES[ps[0]]}</span></div>
+        <div><span>Dealer</span><span>${HAND_NAMES[ds[0]]}${qual?'':' (did not qualify)'}</span></div>
+        <div class="total"><span>Net</span><span>${net>=0?'+':'−'}${fmt(Math.abs(net))} sight</span></div>
+        <div><span>Cookies accepted</span><span>+${got}</span></div></div>
+      <p class="fine" style="margin-top:8px">Thank you for accepting our cookies. The wall comes back in ${HAND_EVERY} bets.</p>`,
+      [{label:'Back to the pond', primary:true, onClick:()=>{ closeModal(); then && then(); }},
+       {label:'Deal another hand', onClick:()=>uthHand(then)}]);
+  }
+  anteStage();
+}
+
 // ---- the felt: chips from the rack go onto a koi's circle, and that circle is the bet ----
 const costOf = st => Math.round(mode==='pond' ? pondTotal(st) : st*(boosted&&mode==='single'?2:1));
-function chipsFor(n){ const out=[]; for(const d of [10,5,1]) while(n>=d && out.length<60){ out.push(d); n-=d; } return out; }
+function chipsFor(n){ const out=[]; for(const d of [500,100,25,5,1]) while(n>=d && out.length<60){ out.push(d); n-=d; } return out; }
 function stackHtml(n){
   if(n<=0) return '';
   const shown=chipsFor(n).slice(-7);  // big chips at the bottom, small ones on top, like a real stack
@@ -689,7 +823,7 @@ function stackHtml(n){
     `<em>${fmt(n)}</em></span>`;
 }
 function renderTable(){
-  if(stake>coins) stake=Math.min(10,coins);
+  if(stake>coins) stake=Math.min(25,coins);
   if(mode==='pond' && costOf(stake)>coins) stake=Math.floor(coins/koi.length);
   const felt=$('felt'), seats=[...koi, ...(departed?[{gone:departed}]:[])];
   const sponsor=ADS[races % ADS.length][0];
@@ -738,12 +872,12 @@ $('go').onclick=()=>{
   if(coins<=0) return brokeModal();
   if(overLimit()) return;
   if(mode!=='pond' && (!pick||stake<=0)) return;
-  if(pellets<=0){ outOfPellets(); return; }
+  if(betsSinceHand>=HAND_EVERY) return cookieWall(()=>$('go').click());
   const cost=betCost();
   if(cost>coins) return;
   const ins = mode==='parlay' && insured && gems>=2;
   if(ins) spendGems(2);
-  coins-=cost; pellets--;
+  coins-=cost; betsSinceHand++;
   if(squints>0){ squints--; squinting=true; toast(`Squinting. You can see the pond for this race. ${squints} left.`); }
   if(coins<Wallet.START/2) bump('dark');
   luckyThisRace = useLucky && luckyOwned>0; if(luckyThisRace) luckyOwned--; useLucky=false; insured=false;
@@ -762,8 +896,7 @@ $('go').onclick=()=>{
 const chip = (label, tab, cls='') => `<button class="chip ${cls}" data-tab="${tab}">${label}</button>`;
 function updateHud(){
   $('coins').textContent=fmt(coins);
-  Wallet.see(squinting ? Wallet.START : coins);  // a squint lends you full sight for one race
-  const c=[chip(`◆ ${fmt(gems)}`,'wallet'), chip(`${pellets}/${MAX_PELLETS} pellets`,'wallet', pellets?'':'warn')];
+  const c=[chip(`${fmt(gems)} ${gems===1?'cookie':'cookies'}`,'wallet'), chip(`hand in ${Math.max(0,HAND_EVERY-betsSinceHand)}`,'wallet', betsSinceHand>=HAND_EVERY-1?'warn':'')];
   const [tier]=loyalty(), rest=[];
   if(credit) rest.push(chip(`${fmt(credit)} credit`,'wallet','gold'));
   if(tier!=='Minnow') rest.push(chip(tier,'account','gold'));
@@ -855,7 +988,7 @@ function photoFinish(){
   const snap=lastFix;
   openModal(`<h3>So close</h3><p>${pick ? pick.name : 'Your koi'} was half a length away. These things turn on nothing at all.</p>
     <p class="fine">Replays are shown exactly as the race was run.</p>`, [
-    {label:'Replay that race — 3 gems', primary:true, disabled:gems<3, onClick:()=>{
+    {label:'Replay that race — 3 cookies', primary:true, disabled:gems<3, onClick:()=>{
       spendGems(3); replayOf=snap; closeModal();
       state='armed'; $('sheet').classList.add('hidden'); syncToast(); say('Replaying. Tap the water to drop the pellet'); }},
     {label:'Let it go', onClick:()=>{ closeModal(); endRound(); }}]);
@@ -883,7 +1016,7 @@ function scheduleTurbo(){
     if(overLimit()) return stopTurbo();
     if(state==='armed'){ dropPellet(rand(80,W-80), rand(80,H*.6)); return; }
     if(state!=='betting') return scheduleTurbo();
-    if(pellets<=0){ stopTurbo(); return outOfPellets(); }
+    if(betsSinceHand>=HAND_EVERY){ stopTurbo(); return cookieWall(()=>{}); }
     if(betCost()>coins){ stopTurbo(); return brokeModal(); }
     if(mode!=='pond' && !pick){ stopTurbo(); return; }
     $('go').click();
@@ -899,16 +1032,16 @@ function fishLeaves(){
   save();
   openModal(`<h3>${k.name} has left the pond</h3><p>Six losses in a row. She swam to the far end and did not come back.
     The other koi have not mentioned it.</p><p class="fine">Fish do not hold grudges. They hold positions.</p>`, [
-    {label:'Bring her back — 8 gems', primary:true, disabled:gems<8, onClick:bringHerBack},
+    {label:'Bring her back — 8 cookies', primary:true, disabled:gems<8, onClick:bringHerBack},
     {label:'Carry on without her', onClick:()=>{ closeModal(); renderSheet(); }}]);
 }
 function offerBuyback(){
   if(!departed) return;
   openModal(`<h3>Bring ${departed} back?</h3>
-    <p>Reuniting a koi with her pond costs 8 gems. You have ${gems}.</p>
+    <p>Reuniting a koi with her pond costs 8 cookies. You have ${gems}.</p>
     <p class="fine">She was free when you started.</p>`, [
-    {label:'Bring her back — 8 gems', primary:true, disabled:gems<8, onClick:bringHerBack},
-    {label:'Get gems', onClick:openShop},
+    {label:'Bring her back — 8 cookies', primary:true, disabled:gems<8, onClick:bringHerBack},
+    {label:'Get cookies', onClick:()=>uthHand(()=>{})},
     {label:'Not now', onClick:closeModal}]);
 }
 function bringHerBack(){
@@ -923,7 +1056,7 @@ function bringHerBack(){
 function energyDrink(k){
   openModal(`<h3>${k.name} needs a rest</h3><p>${k.name} has fed ${k.fed} times today and needs four hours of still water
     before her next race.</p><p class="fine">Or one energy drink, which is also fish food, but faster.</p>`, [
-    {label:'Energy drink — 2 gems', primary:true, disabled:gems<2, onClick:()=>{
+    {label:'Energy drink — 2 cookies', primary:true, disabled:gems<2, onClick:()=>{
       spendGems(2); feeds[k.name]=0; closeModal(); renderSheet(); updateHud(); toast(`${k.name} is ready. Her eyes are very wide.`); }},
     {label:'Let her rest', onClick:closeModal}]);
 }
@@ -966,10 +1099,10 @@ function openWallet(){
   const hrs=credit && creditExpires ? Math.max(0,Math.ceil((creditExpires-Date.now())/3600e3)) : 0;
   openModal(`<h3>Wallet</h3><div class="kv">
       <div><span>Sight<p>The only thing you can bet. The less you have, the less you see.</p></span><span>${fmt(coins)}</span></div>
-      <div><span>Gems<p>Bought with sight. Cannot be turned back into sight.</p></span><span>${fmt(gems)}</span></div>
-      <div><span>Koi Scales<p>What is left over. Converts back at 100:1, in bundles of five gems only.</p></span><span>${fmt(scales)}</span></div>
+      <div><span>Cookies<p>Only won at the poker table. Cannot be turned back into sight. Expire never, which is worse.</p></span><span>${fmt(gems)}</span></div>
+      <div><span>Koi Scales<p>What is left over. Converts back at 100:1, in bundles of five cookies only.</p></span><span>${fmt(scales)}</span></div>
       <div><span>Pond Credit<p>${credit?`Expires in ${hrs}h. Cannot be spent on anything.`:'Cannot be spent on anything.'}</p></span><span>${fmt(credit)}</span></div>
-      <div><span>Pellets<p>One per bet. The countdown does not actually refill them.</p></span><span>${pellets}/${MAX_PELLETS}</span></div>
+      <div><span>Cookie wall<p>Every ${HAND_EVERY} bets the site asks you to accept its cookies, by playing a hand of Ultimate Texas Hold’em.</p></span><span>${Math.max(0,HAND_EVERY-betsSinceHand)} bets left</span></div>
       <div><span>Pretend spent</span><span>${money(spent)}</span></div>
       <div><span>Record</span><span>${fmt(wins)} won, ${fmt(losses)} lost</span></div>
       <div><span>Login streak</span><span>day ${fmt(streakDay)}</span></div>
@@ -1019,15 +1152,6 @@ function flashSale(){
     $('saleTimer').textContent=`${ext}Ends in 0:${String(left).padStart(2,'0')}`; });
 }
 
-function outOfPellets(){
-  const tick=()=>{ const s=Math.max(0,Math.floor((refillAt-Date.now())/1000));
-    $('refill').textContent=`${Math.floor(s/3600)}:${String(Math.floor(s/60)%60).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; };
-  openModal(`<h3>Out of pellets</h3><p>Every bet uses one pellet. Your next free pellet arrives in <b id="refill"></b>.</p>`, [
-    {label:'Watch an ad for 1 pellet', primary:true, onClick:()=>playAd(0)},
-    {label:'Refill for 5 gems', disabled:gems<5, onClick:()=>{ spendGems(5); pellets=MAX_PELLETS; save(); closeModal(); toast('Pellets refilled'); }},
-    {label:'Close', onClick:closeModal}]);
-  tick(); every(1000, tick);
-}
 
 // ---- ads: every ad is the same unit. The pond closes in from the edges until it is
 // gone, and then the ad is the only thing left to look at. ----
@@ -1040,7 +1164,15 @@ const ADS=[['Koi Max™','The only fish food that is also a fish.'],
            ['The Locked Tent','Early access for Sight Club members. The flap opens for people who keep their eyes open.'],
            ['Vision Points™','Now in 1, 5 and 10. Collect all three before your eyes give out.'],
            ['20/20 Rewards','Earn one point for every point of sight you lose. Points expire when you do.'],
-           ['Arcade+','One subscription for every game. Fewer ads, same odds, and you lose your sight ad-free.']];
+           ['Arcade+','One subscription for every game. Fewer ads, same odds, and you lose your sight ad-free.'],
+           // the vision aisle
+           ['Iris Bank','Deposit your sight with us. Withdraw it any time the market is open, which it is not.'],
+           ['Peripheral Pro™','Restore up to 0% of the edges of your vision. Now in 4K.'],
+           ['Blink+','Never miss a race. Our patented formula removes the need to blink, then the need to look away.'],
+           ['Carrot Max™','One carrot has the eyesight benefits of one carrot.'],
+           ['Night Mode for Eyes','Your screen is already dark. Why not the rest of the world?'],
+           ['LensGamble','Try on a new prescription every hand. One of them is yours.'],
+           ['SightSaver Savings','Put 10% of every win aside for later. Later is also a bet.']];
 let adTimer=null;
 // tag: the line above the ad. secs: how long before onEnd. count: label for the countdown, if any.
 function showAd({tag='Advertisement', secs=5, count='', failed=false, onEnd}){
@@ -1069,48 +1201,43 @@ function playAd(stage, purpose){
   if(stage===0) closeModal();
   showAd({tag:`Advertisement · ${stage+1} of 2`, count:'Reward in', onEnd:()=>{
     if(stage===0) return adButtons([{label:'Skip ad', onClick:()=>playAd(1, purpose)}]);
-    adButtons([{label: purpose==='collect' ? 'Collect your sight' : 'Collect 1 pellet', primary:true, onClick:()=>{
+    adButtons([{label:'Collect your sight', primary:true, onClick:()=>{
       closeAd(); bump('ad');
-      if(purpose==='collect'){ const f=pendingCollect; pendingCollect=null; if(f) f(); }
-      else { pellets=Math.min(MAX_PELLETS,pellets+1); save(); updateHud(); renderSheet(); toast('+1 pellet'); }
+      const f=pendingCollect; pendingCollect=null; if(f) f();
     }}]);
   }});
 }
 
-// free gems arrive at roughly one a day, minus the days you forget. the shop is honest about the wait
-const eta = g => `Free in ${fmt(Math.ceil(g*20.6))} days, or now for ${g} gems.`;
+// free cookies arrive at roughly one a day, minus the days you forget. the shop is honest about the wait
+const eta = g => `Free in ${fmt(Math.ceil(g*20.6))} days, or now for ${g} cookies.`;
 const abMul = () => abGroup==='B' ? 1.15 : 1;        // there is no group A
 function openShop(){
-  const one=Math.ceil(gemPrice*abMul()), pack=Math.ceil(one*12), SCALE_RATE=100, scaleBundle=5*SCALE_RATE;
+  const SCALE_RATE=100, scaleBundle=5*SCALE_RATE;
   const items=[
-    {name:'1 gem', desc:'The price goes up every time you buy. That’s just how gems work.',
-      price:`${fmt(one)} sight`, can:coins>=one, buy:()=>{ coins-=one; gems++; gemPrice=Math.ceil(gemPrice*1.15); }},
-    {name:'Gem pack, 10 gems', desc:'Best value!* *Slightly worse value. Gems come in tens. Everything costs threes and fives.',
-      price:`${fmt(pack)} sight`, can:coins>=pack, buy:()=>{ coins-=pack; gems+=10; gemPrice=Math.ceil(gemPrice*1.15); }},
-    {name:'Convert Koi Scales', desc:`You have ${fmt(scales)}. Scales convert at ${SCALE_RATE}:1, in bundles of five gems only, so you need ${fmt(scaleBundle)}.`,
+    {name:'Accept cookies', desc:'Cookies cannot be bought. They are only given out at the table, one hand of Ultimate Texas Hold’em at a time.',
+      price:'Play a hand', can:true, buy:()=>{ uthHand(()=>openShop()); return 'stay'; }},
+    {name:'Convert Koi Scales', desc:`You have ${fmt(scales)}. Scales convert at ${SCALE_RATE}:1, in bundles of five cookies only, so you need ${fmt(scaleBundle)}.`,
       price:`${fmt(scaleBundle)} scales`, can:scales>=scaleBundle, buy:()=>{ scales-=scaleBundle; gems+=5; }},
-    {name:'Lucky pellet', desc:`Raises your chance of winning by up to 0%. ${eta(3)}`, price:'3 gems',
+    {name:'Lucky pellet', desc:`Raises your chance of winning by up to 0%. ${eta(3)}`, price:'3 cookies',
       can:gems>=3, buy:()=>{ spendGems(3); luckyOwned++; }},
-    {name:'Mystery egg', desc:`Hatches a hat for a fish you don’t own. ${eta(5)}`, price:'5 gems',
+    {name:'Mystery egg', desc:`Hatches a hat for a fish you don’t own. ${eta(5)}`, price:'5 cookies',
       can:gems>=5, buy:()=>{ spendGems(5); hatchEgg(); return 'stay'; }},
     {name:'Duplicate protection', desc: dupProt ? 'Active. You may still receive duplicates.'
-      : 'Never open the same hat twice.* *Does not prevent duplicates.', price: dupProt ? 'Owned' : '7 gems',
+      : 'Never open the same hat twice.* *Does not prevent duplicates.', price: dupProt ? 'Owned' : '7 cookies',
       can:!dupProt && gems>=7, buy:()=>{ spendGems(7); dupProt=true; }},
-    {name:'Pellet refill', desc:`Back to ${MAX_PELLETS} pellets.`, price:'5 gems',
-      can:gems>=5 && pellets<MAX_PELLETS, buy:()=>{ spendGems(5); pellets=MAX_PELLETS; }},
     {name:'Turbo pond', desc: turboOwned ? 'Owned. Toggle it on the bet sheet.'
       : `Bets place themselves, over and over, until you stop or run out. ${eta(15)}`,
-      price: turboOwned ? 'Owned' : '15 gems', can:!turboOwned && gems>=15, buy:()=>{ spendGems(15); turboOwned=true; }},
+      price: turboOwned ? 'Owned' : '15 cookies', can:!turboOwned && gems>=15, buy:()=>{ spendGems(15); turboOwned=true; }},
     {name:'Squint', desc:`See the pond clearly for your next race. Your sight is still gone afterward. You have ${squints}.`,
-      price:'4 gems', can:gems>=4, buy:()=>{ spendGems(4); squints++; }},
-    {name:'Eye drops', desc:'Restores up to 0 sight. Soothing, though.', price:'3 gems',
+      price:'4 cookies', can:gems>=4, buy:()=>{ spendGems(4); squints++; }},
+    {name:'Eye drops', desc:'Restores up to 0 sight. Soothing, though.', price:'3 cookies',
       can:gems>=3, buy:()=>{ spendGems(3); toast('Your eyes feel cooler. You see exactly as much as before.'); }},
-    {name:'High-roller felt', desc:`The same table in a darker green, which is easier on tired eyes. ${eta(12)}`, price:'12 gems',
+    {name:'High-roller felt', desc:`The same table in a darker green, which is easier on tired eyes. ${eta(12)}`, price:'12 cookies',
       can:gems>=12, buy:()=>{ spendGems(12); toast('The felt is now slightly darker. So is everything else.'); }},
     {name:'Pond Pass VIP', desc: vip ? 'You’re VIP. Your losses now have gold trim.' : `Gold trim on every loss. That’s the whole benefit. ${eta(20)}`,
-      price: vip ? 'Owned' : '20 gems', can:!vip && gems>=20, buy:()=>{ spendGems(20); vip=true; }},
+      price: vip ? 'Owned' : '20 cookies', can:!vip && gems>=20, buy:()=>{ spendGems(20); vip=true; }},
   ];
-  openModal(`<h3>Pond shop</h3><p class="fine">You have ${fmt(coins)} sight, ${gems} ${gems===1?'gem':'gems'}${scales?`, ${fmt(scales)} Koi Scales`:''}.
+  openModal(`<h3>Pond shop</h3><p class="fine">You have ${fmt(coins)} sight, ${gems} ${gems===1?'cookie':'cookies'}${scales?`, ${fmt(scales)} Koi Scales`:''}.
       You are in pricing experiment group ${abGroup}. Prices in group ${abGroup} are higher. This cannot be changed.</p>` +
     items.map((it,i)=>`<div class="item"><div><b>${it.name}</b><p>${it.desc}</p></div><button data-i="${i}" ${it.can?'':'disabled'}>${it.price}</button></div>`).join(''),
     [{label:'Odds disclosure', onClick:lootOdds},
@@ -1177,7 +1304,7 @@ function hatchEgg(){
       ${dupe?`<p class="fine">You already had this hat.${dupProt?' Duplicate protection is active.':''}</p>`:''}
       <p class="pity">You were one position away from Legendary.</p>
       <p class="fine">Hats give no advantage of any kind.</p>`,
-      [{label:'Open another egg (5 gems)', disabled:gems<5, onClick:()=>{ spendGems(5); updateHud(); hatchEgg(); }},
+      [{label:'Open another egg (5 cookies)', disabled:gems<5, onClick:()=>{ spendGems(5); updateHud(); hatchEgg(); }},
        {label:'Nice', primary:true, onClick:closeModal}]);
   }
 }
@@ -1269,7 +1396,7 @@ function cashOut(){
     </div>
     <p class="fine" style="margin-top:10px">Withdrawals are processed within 90 business days. Identity verification
       is required: please upload a photograph of your koi.</p>`, [
-    {label:'Convert balance to gems instead', primary:true, onClick:convertToGems},
+    {label:'Convert balance to cookies instead', primary:true, onClick:convertToGems},
     {label:'Upload a photograph of your koi', onClick:verifyKoi},
     {label:'Close', onClick:closeModal}]);
 }
@@ -1282,15 +1409,15 @@ function verifyKoi(){
 }
 function convertToGems(){
   const RATE=500, got=Math.floor(coins/RATE), rest=coins%RATE;
-  openModal(`<h3>Convert to gems</h3><div class="receipt">
-      <div><span>${fmt(coins)} sight at ${fmt(RATE)}:1</span><span>${got} ${got===1?'gem':'gems'}</span></div>
+  openModal(`<h3>Convert to cookies</h3><div class="receipt">
+      <div><span>${fmt(coins)} sight at ${fmt(RATE)}:1</span><span>${got} ${got===1?'cookie':'cookies'}</span></div>
       <div><span>Remainder, as Koi Scales</span><span>${fmt(rest)}</span></div>
       <div class="total"><span>Convertible back to sight</span><span>no</span></div></div>
-    <p class="fine" style="margin-top:10px">Conversion is one way. Gems cannot be converted to sight, cashed out,
+    <p class="fine" style="margin-top:10px">Conversion is one way. Cookies cannot be converted to sight, cashed out,
       or withdrawn, and have no value of any kind, including the kind they are sold in.</p>`, [
     {label:`Convert everything`, primary:true, disabled:coins<RATE, onClick:()=>{
       coins=0; gems+=got; scales+=rest; updateHud(); renderSheet(); save(); closeModal();
-      toast(`Converted. You now have ${gems} gems and nothing to bet.`); }},
+      toast(`Converted. You now have ${gems} cookies and nothing to bet.`); }},
     {label:'Back', onClick:cashOut}]);
 }
 
@@ -1438,7 +1565,7 @@ function dailyStreak(missed){
     const lost=streakDay; streakDay=1; save();
     return openModal(`<h3>Your ${lost}-day streak is gone</h3>
       <p>You missed a day. The streak resets to day 1. There is no partial credit for the ${lost-1} days you did turn up.</p>`, [
-      {label:'Streak Repair — 10 gems', primary:true, disabled:gems<10, onClick:()=>{
+      {label:'Streak Repair — 10 cookies', primary:true, disabled:gems<10, onClick:()=>{
         spendGems(10); streakDay=lost+1; updateHud(); save(); welcomeGem(); }},
       {label:'Start again at day 1', onClick:welcomeGem}]);
   }
@@ -1447,8 +1574,8 @@ function dailyStreak(missed){
   save(); welcomeGem();
 }
 function welcomeGem(){
-  openModal(`<h3>Day ${streakDay} login streak</h3><p>Here’s 1 free gem. Come back tomorrow for another gem,
-    or every day for 30 days to unlock 2 gems.</p>`,
+  openModal(`<h3>Day ${streakDay} login streak</h3><p>Here’s 1 free cookie. Come back tomorrow for another cookie,
+    or every day for 30 days to unlock 2 cookies.</p>`,
     [{label:'Collect', primary:true, onClick:()=>{ gems++; updateHud(); renderSheet(); save(); closeModal();
       say('Tap the water anytime to watch them feed', 3500); }}]);
 }
@@ -1481,7 +1608,7 @@ const feeOn = g => Math.round(g*FEE);
 
 // ---- season pass ----
 const SEASON_LEN=14*864e5, TIER_XP=4, MAX_TIER=50, FREE_TIER=40, PASS_PRICE=25;
-const premReward = t => t%10===0 ? 'Hat' : t%5===0 ? '2 gems' : t%2===0 ? '100 sight' : '1 gem';
+const premReward = t => t%10===0 ? 'Hat' : t%5===0 ? '2 cookies' : t%2===0 ? '100 sight' : '1 cookie';
 const freeReward = t => t===FREE_TIER ? 'Hat' : '—';
 function seasonCheck(){
   if(!season.ends){ season.ends=Date.now()+SEASON_LEN; return; }
@@ -1516,10 +1643,10 @@ function openPass(){
     <div class="track">${boxes.join('')}</div>
     <p class="fine">Top row is the free track. It has one reward, at tier ${FREE_TIER}.
       Bottom row is the premium track${season.premium?'.':', which you do not have.'}</p>`, [
-    ...(season.premium ? [] : [{label:`Unlock Premium Pond Pass — ${PASS_PRICE} gems`, primary:true, disabled:gems<PASS_PRICE,
+    ...(season.premium ? [] : [{label:`Unlock Premium Pond Pass — ${PASS_PRICE} cookies`, primary:true, disabled:gems<PASS_PRICE,
       onClick:()=>{ spendGems(PASS_PRICE); season.premium=true; save(); updateHud(); openPass(); }}]),
     ...(owed>0 ? [{label:`Claim ${owed} ${owed===1?'reward':'rewards'}`, primary:true, onClick:claimPass}] : []),
-    {label:'Buy 5 tiers — 10 gems', disabled:gems<10 || season.tier>=MAX_TIER, onClick:()=>{
+    {label:'Buy 5 tiers — 10 cookies', disabled:gems<10 || season.tier>=MAX_TIER, onClick:()=>{
       spendGems(10); season.tier=Math.min(MAX_TIER, season.tier+5); save(); updateHud(); openPass(); }},
     {label:'Close', onClick:closeModal}], 'pass');
 }
@@ -1529,7 +1656,7 @@ function claimPass(){
     if(season.claimed.includes(t)) continue;
     season.claimed.push(t);
     const r=premReward(t);
-    if(r==='1 gem') gems+=1; else if(r==='2 gems') gems+=2;
+    if(r==='1 cookie') gems+=1; else if(r==='2 cookies') gems+=2;
     else if(r==='100 sight'){ coins+=100; coinsGot+=100; }
     else { const k=koi[Math.floor(Math.random()*koi.length)]; if(k) hats[k.name]=['#4f86c6','#d14b7a','#3fa36b'][Math.floor(Math.random()*3)]; }
     got++;
@@ -1568,12 +1695,12 @@ function bump(id, n=1){
 function openQuests(){
   rollQuests();
   const rows=quests.map((q,i)=>`<div class="quest"><div><b>${q.label}</b>
-      <p>${fmt(q.n)} / ${fmt(q.target)} · ${q.reward} ${q.reward===1?'gem':'gems'}</p></div>
+      <p>${fmt(q.n)} / ${fmt(q.target)} · ${q.reward} ${q.reward===1?'cookie':'cookies'}</p></div>
       <button data-i="${i}" ${q.claimed?'disabled':q.n>=q.target?'':'disabled'}>${q.claimed?'Claimed':'Claim'}</button></div>`).join('');
   openModal(`<h3>Today's quests</h3>${rows}
     <p class="fine" style="margin-top:10px">Quests reset at midnight. Unfinished quests do not carry over,
       and neither does the part you finished.</p>`, [
-    {label:'Reroll one quest — 3 gems', disabled:gems<3, onClick:()=>{
+    {label:'Reroll one quest — 3 cookies', disabled:gems<3, onClick:()=>{
       spendGems(3);
       const i=Math.floor(Math.random()*quests.length);
       const pool=QUEST_POOL.filter(q=>!quests.some(x=>x.id===q.id));
@@ -1584,7 +1711,7 @@ function openQuests(){
     const q=quests[+b.dataset.i];
     if(!q || q.claimed || q.n<q.target) return;
     q.claimed=true; gems+=q.reward; save(); updateHud(); renderSheet();
-    toast(`+${q.reward} ${q.reward===1?'gem':'gems'}`); openQuests();
+    toast(`+${q.reward} ${q.reward===1?'cookie':'cookies'}`); openQuests();
   });
 }
 
@@ -1622,7 +1749,7 @@ function interstitial(){
 $('fullX').onclick=()=>{ closeAd(); bump('ad'); if(turbo && state==='betting') scheduleTurbo(); };
 
 // ---- notifications you cannot decline ----
-const PUSHES=['Hana misses you.','Your pellets are full. They will not stay full.',
+const PUSHES=['Hana misses you.','Your cookies have expired. New ones are waiting at the table.',
   'Kenji_84 has passed you again.','Your offer expires in four minutes.',
   'You have unclaimed rewards. You do not, but you might.','Someone fed your koi. It was us.',
   'We noticed you stopped. We notice everything.',
@@ -1672,7 +1799,7 @@ function cookies(then){
 const TOS=`<p>1. By tapping water you enter into an agreement with the pond.</p>
   <p>2. The koi are not real. You agree that you already knew this, and waive any claim arising from
      having briefly forgotten it.</p>
-  <p>3. Sight, gems, Koi Scales and Pond Credit have no value. This includes the value at which they are sold.</p>
+  <p>3. Sight, cookies, Koi Scales and Pond Credit have no value. This includes the value at which they are sold.</p>
   <p>4. Displayed odds are indicative. The basis on which winnings are paid is the basis on which winnings are paid.</p>
   <p>5. We may change these terms at any time. You agree in advance to the terms as changed, including terms
      not yet written, and to any pond they are later applied to.</p>
@@ -1776,7 +1903,15 @@ canvas.addEventListener('pointerdown', e=>dropPellet(e.clientX, e.clientY));
 
 // ---- render loop ----
 const glints=Array.from({length:40},()=>({x:rand(0,1),y:rand(0,1),p:rand(0,TAU)}));
+// your sight is only taken once the pellet is in the water: betting and aiming happen in full view,
+// the race and its result happen in whatever sight you have left. A squint lends you full sight.
+function syncSight(){
+  const n = (state==='racing' || state==='result') && !squinting ? coins : Wallet.START;
+  const want = Wallet.loss(n).toFixed(3);
+  if(document.documentElement.style.getPropertyValue('--loss')!==want) Wallet.see(n);
+}
 function frame(time){
+  syncSight();
   const g=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*.7);
   g.addColorStop(0,css('--water')); g.addColorStop(1,css('--water-deep'));
   ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
