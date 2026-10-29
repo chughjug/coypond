@@ -33,7 +33,7 @@
   #pond { filter:blur(var(--blur,0px)); transition:filter .8s ease; }
   .blind { position:fixed; inset:0; pointer-events:none; transition:background .8s ease;
     background:radial-gradient(ellipse at 50% 42%, transparent calc(78% - var(--loss,0)*70%),
-      rgba(5,12,11,calc(.35 + var(--loss,0)*.6)) calc(100% - var(--loss,0)*55%)); }
+      rgba(5,12,11,calc(var(--loss,0)*.95)) calc(100% - var(--loss,0)*55%)); }
   button { font:inherit; color:inherit; cursor:pointer; }
   button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 
@@ -416,7 +416,7 @@ let races=0, pity=0, dupProt=false, creditExpires=0, creditTimer=null;
 let streakDay=1, lastSeen=0, limitSet=false, sessionStart=Date.now(), limitTimer=null;
 let departed=null, lastFix=null, nearMiss=false, replayOf=null;
 let rivalScore=0, watching=false, watchTimer=null, pendingCollect=null, optOpen=false, folded=false;
-let coinBurst=[], slowFrames=0, squints=0, squinting=false;
+let coinBurst=[], slowFrames=0, squints=0, squinting=false, lostRace=false;
 // wave two
 let season={tier:0, xp:0, premium:false, ends:0, claimed:[]};
 let quests=[], questDay='', tierPoints=0, sinceAd=0;
@@ -430,6 +430,7 @@ const CHIPS=[5,25,100,500];  // Vision Points. 1 VP is 1 point of sight
 const SAVE='koipondstakes.v1';
 function save(){
   Wallet.set(coins);
+  syncSight();  // Wallet.set applies your real sight; put back whatever this moment of the race allows
   try { localStorage.setItem(SAVE, JSON.stringify({
     coins, gems, wins, losses, credit, scales, luckyOwned, vip, gemPrice, lossStreak, betsSinceHand,
     spent, whale, firstBuy, club, clubPrice, turboOwned, races, pity, dupProt, creditExpires, streakDay,
@@ -923,7 +924,7 @@ function showResult(html, ms, then){
 }
 function raceOver(winner){
   if(state!=='racing') return;
-  state='result'; races++; squinting=false;
+  state='result'; races++; squinting=false; lostRace=false;
   const lucky = luckyThisRace ? '<small>Lucky pellet bonus applied: +0%</small>' : '';
   const vipLine = vip ? '<small>Lost in VIP style.</small>' : '';
   const wasReplay = !!replayOf; replayOf=null;
@@ -955,7 +956,7 @@ function raceOver(winner){
       html=`The whole parlay hit<strong class="w">+${fmt(p.pay-fee)}</strong>
         <small>Less a ${fmt(fee)} pond maintenance fee. The fee applies to winnings only.</small>`; }
     else {
-      losses++; lossStreak++; bump('lose'); thud();
+      losses++; lossStreak++; lostRace=true; bump('lose'); thud();
       const hit=p.leg-1, close = hit===p.legs-1;
       html=`${winner.name} got there first<strong class="l">−${stake}</strong><small>${close ? `${hit} of ${p.legs} legs hit. One fish away from ${fmt(p.pay)}!` : `Leg ${p.leg} missed.`}</small>`;
       if(p.insured && close){ grantCredit(stake);
@@ -974,7 +975,7 @@ function raceOver(winner){
       <small>Paid at house basis ${oddsText(Math.round(basis*10)/10)}. Displayed odds are indicative.
         Pond maintenance fee ${fmt(fee)}, charged on winnings only.</small>${lucky}`;
   } else {
-    losses++; lossStreak++; bump('lose'); nearMiss ? tease() : thud();
+    losses++; lossStreak++; lostRace=true; bump('lose'); nearMiss ? tease() : thud();
     const bigger=Math.max(50, stake*5);
     html=`${winner.name} got there first<strong class="l">−${fmt(cost)}</strong>
       ${nearMiss?`<small>Photo finish. ${pick.name} lost by half a length.</small>`:''}
@@ -1903,10 +1904,10 @@ canvas.addEventListener('pointerdown', e=>dropPellet(e.clientX, e.clientY));
 
 // ---- render loop ----
 const glints=Array.from({length:40},()=>({x:rand(0,1),y:rand(0,1),p:rand(0,TAU)}));
-// your sight is only taken once the pellet is in the water: betting and aiming happen in full view,
-// the race and its result happen in whatever sight you have left. A squint lends you full sight.
+// your sight is only taken once a bet has been settled against you: betting, aiming and the race itself
+// happen in full view, and the dark comes in on the result of a race you lost. A squint lends you full sight.
 function syncSight(){
-  const n = (state==='racing' || state==='result') && !squinting ? coins : Wallet.START;
+  const n = state==='result' && lostRace && !squinting ? coins : Wallet.START;
   const want = Wallet.loss(n).toFixed(3);
   if(document.documentElement.style.getPropertyValue('--loss')!==want) Wallet.see(n);
 }
