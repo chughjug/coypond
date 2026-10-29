@@ -77,10 +77,57 @@
     width:38px; height:4px; border-radius:2px; background:var(--line); }
   .sheet.peek #foldable { display:none; }
   .sheet.peek h2 { font-size:15px; font-weight:400; opacity:.75; margin-bottom:8px; }
-  .fish { display:flex; gap:10px; overflow-x:auto; padding-bottom:4px; scrollbar-width:none; }
-  .fish::-webkit-scrollbar { display:none; }
-  .fish button { flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:4px;
-    min-width:66px; padding:9px 8px; border:1.5px solid var(--line); border-radius:14px; background:transparent; font-size:15px; }
+  /* the bet goes down in Vision Point chips on a felt table: one betting circle per koi */
+  .felt { position:relative; height:228px; margin:34px 0 6px; border-radius:50% / 46%;
+    background:radial-gradient(ellipse at 50% 40%, #2f9460, #124a2b 78%);
+    box-shadow:inset 0 0 0 7px #6b3f1f, inset 0 0 0 9px #a8742f, inset 0 8px 24px rgba(0,0,0,.45), 0 4px 10px rgba(0,0,0,.2); }
+  .felt .pot { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:42%; text-align:center;
+    color:#f3efe6; pointer-events:none; }
+  .felt .pot b { display:block; font-size:20px; font-variant-numeric:tabular-nums; }
+  .felt .pot span { display:block; font-size:12px; opacity:.8; }
+  .felt .pot small { display:block; margin-top:4px; font-size:10px; opacity:.55; letter-spacing:.06em; text-transform:uppercase; }
+  .felt .pot .stack { position:relative; left:auto; bottom:auto; transform:none; margin:0 auto 4px; }
+  .spot { position:absolute; transform:translate(-50%,-50%); width:60px; height:60px; border-radius:50%; padding:0;
+    border:2px dashed rgba(243,239,230,.55); background:rgba(0,0,0,.14); color:#f3efe6;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; font-size:12px; line-height:1.1; }
+  .spot .swatch { width:24px; height:10px; }
+  .spot .swatch i { width:8px; height:8px; left:8px; }
+  .spot .odds { font-size:11px; opacity:.8; }
+  .spot .rest { font-size:10px; opacity:.8; }
+  .spot[aria-pressed="true"] { border:2px solid #f3d27a !important; box-shadow:0 0 0 3px rgba(243,210,122,.3) !important; background:rgba(0,0,0,.24); }
+  .spot.dim { opacity:.45; }
+  .stack { position:absolute; left:50%; bottom:92%; transform:translateX(-50%); width:28px; height:var(--h,28px); pointer-events:none; }
+  .stack .vpchip { position:absolute; left:0; bottom:calc(var(--i) * 4px); --size:28px; }
+  .stack em { position:absolute; left:110%; bottom:0; font-style:normal; font-size:11px; font-weight:700; color:#f3efe6;
+    background:rgba(0,0,0,.55); padding:1px 5px; border-radius:8px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .rack { display:flex; align-items:center; justify-content:center; gap:12px; margin:8px 0 10px; padding:10px 12px;
+    border-radius:14px; background:linear-gradient(#6b3f1f, #4b2b14); box-shadow:inset 0 2px 6px rgba(0,0,0,.45); }
+  .rack .vpchip { --size:46px; border:0; padding:0; cursor:pointer; }
+  .rack .vpchip:disabled { opacity:.35; cursor:default; }
+  .rack .vpchip:active { transform:translateY(2px); }
+  .rack .racktext { padding:7px 10px; border-radius:10px; border:1.5px solid rgba(243,239,230,.5); background:transparent;
+    color:#f3efe6; font-size:13px; }
+  .rack .racktext:disabled { opacity:.35; }
+
+  /* Vision Point chips, from the "poker chip design" file (renamed: .chip is already the HUD's) */
+  .vpchip { --size:120px; --base:#c43a2c; --stripe:#fbf3e4; --face:#fbf3e4; --txt:#a12c20; --edge:#7a1f17;
+    position:relative; width:var(--size); height:var(--size); border-radius:50%; display:inline-grid; place-items:center;
+    align-content:center; line-height:1; user-select:none; color:var(--txt); font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+    background:radial-gradient(circle, var(--face) 0 47%, var(--base) 48% 56%, transparent 57%),
+      repeating-conic-gradient(var(--base) 0 30deg, var(--stripe) 30deg 45deg);
+    box-shadow:0 calc(var(--size) * .04) 0 var(--edge), 0 calc(var(--size) * .08) calc(var(--size) * .1) rgba(0,0,0,.45),
+      inset 0 0 0 calc(var(--size) * .03) rgba(0,0,0,.15); }
+  .vpchip::before { content:""; position:absolute; inset:22%; border-radius:50%; border:calc(var(--size) * .015) dashed var(--base); opacity:.55; }
+  .vpchip::after { content:""; position:absolute; inset:0; border-radius:50%; pointer-events:none;
+    background:linear-gradient(150deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,0) 45%); }
+  .vpchip b { position:relative; z-index:1; font-weight:800; font-size:calc(var(--size) * .32); letter-spacing:-.02em; }
+  .vpchip i { position:relative; z-index:1; font-style:normal; font-weight:700; font-size:calc(var(--size) * .12);
+    letter-spacing:.12em; margin-top:calc(var(--size) * .02); opacity:.8; }
+  .vpchip.vp1  { --base:#e9e4d8; --stripe:#2f6db5; --face:#fbf8f1; --txt:#24486f; --edge:#a8a294; }
+  .vpchip.vp5  { --base:#c43a2c; --stripe:#fbf3e4; --face:#fbf3e4; --txt:#a12c20; --edge:#7a1f17; }
+  .vpchip.vp10 { --base:#1f4fa0; --stripe:#fbf3e4; --face:#fbf3e4; --txt:#1b4189; --edge:#122f61; }
+  .stack .vpchip b { font-size:calc(var(--size) * .34); }
+  .stack .vpchip i { display:none; }
   .swatch { width:34px; height:14px; border-radius:7px; position:relative; overflow:hidden; }
   .swatch i { position:absolute; width:12px; height:12px; border-radius:50%; top:1px; left:12px; }
   .odds { font-size:13px; opacity:.75; font-variant-numeric:tabular-nums; }
@@ -288,8 +335,8 @@
   <div id="foldable">
     <div class="row seg" id="modeRow"></div>
     <div class="row seg" id="legsRow"></div>
-    <div class="fish" id="fishList"></div>
-    <div class="row" id="amounts"></div>
+    <div class="felt" id="felt" aria-label="Betting table"></div>
+    <div class="rack" id="rack" aria-label="Your chips"></div>
     <button class="disclose" id="optBtn" hidden></button>
     <div class="row" id="extras"></div>
   </div>
@@ -347,7 +394,7 @@ let races=0, pity=0, dupProt=false, creditExpires=0, creditTimer=null;
 let streakDay=1, lastSeen=0, limitSet=false, sessionStart=Date.now(), limitTimer=null;
 let departed=null, lastFix=null, nearMiss=false, replayOf=null;
 let rivalScore=0, watching=false, watchTimer=null, pendingCollect=null, optOpen=false, folded=false;
-let coinBurst=[], slowFrames=0;
+let coinBurst=[], slowFrames=0, squints=0, squinting=false;
 // wave two
 let season={tier:0, xp:0, premium:false, ends:0, claimed:[]};
 let quests=[], questDay='', tierPoints=0, sinceAd=0;
@@ -355,17 +402,18 @@ let consent=false, agreed=false, sound=true, oddsFmt='frac', abGroup='B';
 let referrals=0, declines=7, audio=null, pushTimer=null;
 const money = n => '$'+n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 const PACKS=Wallet.PACKS;  // the same packs the shop on home.html sells
-const AMOUNTS=[10,25,50,'All in'];
+const CHIPS=[1,5,10];  // Vision Points. 1 VP is 1 point of sight
 
 // ---- save file (the sunk cost is the product) ----
 const SAVE='koipondstakes.v1';
 function save(){
   Wallet.set(coins);
+  if(squinting) Wallet.see(Wallet.START);  // Wallet.set re-applies the real blur
   try { localStorage.setItem(SAVE, JSON.stringify({
     coins, gems, pellets, wins, losses, credit, scales, luckyOwned, vip, gemPrice, lossStreak, refillAt,
     spent, whale, firstBuy, club, clubPrice, turboOwned, races, pity, dupProt, creditExpires, streakDay,
     limitSet, rivalScore, hats, feeds, departed, season, quests, questDay, tierPoints, consent, agreed,
-    sound, oddsFmt, abGroup, referrals, declines, sinceAd, lastSeen:Date.now() })); } catch(e){}
+    sound, oddsFmt, abGroup, referrals, declines, sinceAd, squints, lastSeen:Date.now() })); } catch(e){}
 }
 function load(){
   coins=Wallet.get(); // the arcade wallet is the source of truth for sight
@@ -386,7 +434,7 @@ function load(){
     claimed: Array.isArray(d.season.claimed) ? d.season.claimed : []};
   if(Array.isArray(d.quests)) quests=d.quests;
   questDay = typeof d.questDay==='string' ? d.questDay : '';
-  tierPoints=num(d.tierPoints,tierPoints); sinceAd=num(d.sinceAd,sinceAd);
+  tierPoints=num(d.tierPoints,tierPoints); sinceAd=num(d.sinceAd,sinceAd); squints=num(d.squints,squints);
   referrals=num(d.referrals,referrals); declines=num(d.declines,declines);
   consent=!!d.consent; agreed=!!d.agreed; sound=d.sound!==false;
   if(['frac','dec','amer'].includes(d.oddsFmt)) oddsFmt=d.oddsFmt;
@@ -581,29 +629,12 @@ function renderSheet(){
     ? [modeName, pick && pick.name, `${fmt(stake)} sight`].filter(Boolean).join(' · ')
     : mode==='parlay' ? 'How many races in a row?'
     : mode==='pond' ? 'Feed the whole pond. Every koi is backed, so somebody always wins'
-    : 'Which koi eats the pellet first?';
+    : 'Chips on the felt. Which koi eats the pellet first?';
   toggleRow($('modeRow'), [['Single','single'],['Parlay','parlay'],['Pond','pond']], mode, v=>{ mode=v; if(v==='pond') pick=null; });
   $('legsRow').hidden = mode!=='parlay';
   toggleRow($('legsRow'), [['2',2],['3',3],['4',4],['6',6]], legs, v=>{ legs=v; });
 
-  const list=$('fishList'); list.innerHTML='';
-  list.classList.toggle('dim', mode==='pond');
-  for(const k of koi){
-    const b=document.createElement('button');
-    b.setAttribute('aria-pressed', mode==='pond' ? true : pick===k);
-    const shown = oddsText(boosted ? Math.round(k.odds*boostMult()*10)/10 : k.odds);
-    b.innerHTML=`<span class="swatch" style="background:${k.base}"><i style="background:${k.spot}"></i></span>${k.name}`+
-      (k.resting ? `<span class="rest">resting</span>` : `<span class="odds">${shown}</span>`);
-    b.onclick=()=>{ if(k.resting) return energyDrink(k); if(mode==='pond') return; pick=k; renderSheet(); };
-    list.appendChild(b);
-  }
-  if(departed){
-    const b=document.createElement('button'); b.className='dim';
-    b.innerHTML=`<span class="swatch" style="background:var(--line)"></span>${departed}<span class="rest">left</span>`;
-    b.onclick=offerBuyback; list.appendChild(b);
-  }
-  if(stake>coins) stake=Math.min(10,coins);
-  toggleRow($('amounts'), AMOUNTS.map(a=>{ const v=a==='All in'?coins:a; return [a,v,v>coins||v<=0]; }), stake, v=>{ stake=v; });
+  renderTable();
 
   const extras=[];
   if(luckyOwned>0) extras.push([`Lucky pellet (${luckyOwned})`,'lucky']);
@@ -640,13 +671,69 @@ function renderSheet(){
     syncToast(); return;
   }
   go.disabled = !pick || stake<=0 || cost>coins || pick.resting;
-  go.textContent = !pick ? 'Pick a koi'
+  go.textContent = !pick ? (stake ? 'Put your chips on a koi' : 'Place your chips')
     : pick.resting ? `${pick.name} is resting`
     : cost>coins ? `Boosted odds need ${fmt(cost)} sight`
     : mode==='parlay' ? `Bet ${stake}: ${pick.name} wins ${legs} in a row to win ${fmt(parlayPay(pick,legs,stake))}`
     : `Bet ${fmt(cost)} on ${pick.name} to win ${fmt(Math.round(stake*pick.odds*boostMult()))}`;
   syncToast();
 }
+// ---- the felt: chips from the rack go onto a koi's circle, and that circle is the bet ----
+const costOf = st => Math.round(mode==='pond' ? pondTotal(st) : st*(boosted&&mode==='single'?2:1));
+function chipsFor(n){ const out=[]; for(const d of [10,5,1]) while(n>=d && out.length<60){ out.push(d); n-=d; } return out; }
+function stackHtml(n){
+  if(n<=0) return '';
+  const shown=chipsFor(n).slice(-7);  // big chips at the bottom, small ones on top, like a real stack
+  return `<span class="stack" style="--h:${28+(shown.length-1)*4}px">` +
+    shown.map((d,i)=>`<span class="vpchip vp${d}" style="--i:${i}"><b>${d}</b><i>VP</i></span>`).join('') +
+    `<em>${fmt(n)}</em></span>`;
+}
+function renderTable(){
+  if(stake>coins) stake=Math.min(10,coins);
+  if(mode==='pond' && costOf(stake)>coins) stake=Math.floor(coins/koi.length);
+  const felt=$('felt'), seats=[...koi, ...(departed?[{gone:departed}]:[])];
+  const sponsor=ADS[races % ADS.length][0];
+  const pot = mode==='pond' ? costOf(stake) : stake;
+  felt.innerHTML = `<div class="pot">${(!pick && mode!=='pond') ? stackHtml(stake) : ''}
+      <b>${pot ? `${fmt(pot)} VP` : 'Place your bets'}</b>
+      <span>${mode==='pond' ? `${fmt(stake)} on every koi` : pick ? `on ${pick.name}` : stake ? 'Tap a koi to put it down' : 'Tap a chip, then a koi'}</span>
+      <small>Felt sponsored by ${sponsor}</small></div>`;
+  seats.forEach((k,i)=>{
+    const a=-Math.PI/2 + i*2*Math.PI/seats.length, b=document.createElement('button');
+    b.className='spot'; b.style.left=`${50+41*Math.cos(a)}%`; b.style.top=`${50+37*Math.sin(a)}%`;
+    if(k.gone){
+      b.classList.add('dim');
+      b.innerHTML=`<span class="swatch" style="background:var(--line)"></span>${k.gone}<span class="rest">left</span>`;
+      b.onclick=offerBuyback; felt.appendChild(b); return;
+    }
+    const on = mode==='pond' || pick===k;
+    b.setAttribute('aria-pressed', on);
+    b.setAttribute('aria-label', `${k.name}, ${k.resting?'resting':oddsText(k.odds)}${on&&stake?`, ${stake} VP on it`:''}`);
+    const shown = oddsText(boosted ? Math.round(k.odds*boostMult()*10)/10 : k.odds);
+    b.innerHTML = (on ? stackHtml(stake) : '') +
+      `<span class="swatch" style="background:${k.base}"><i style="background:${k.spot}"></i></span>${k.name}` +
+      (k.resting ? `<span class="rest">resting</span>` : `<span class="odds">${shown}</span>`);
+    b.onclick=()=>{ if(k.resting) return energyDrink(k); if(mode==='pond') return; pick=k; tone(520,.04,'triangle',.03); renderSheet(); };
+    felt.appendChild(b);
+  });
+
+  const rack=$('rack'); rack.innerHTML='';
+  for(const d of CHIPS){
+    const c=document.createElement('button');
+    c.className=`vpchip vp${d}`; c.innerHTML=`<b>${d}</b><i>VP</i>`;
+    c.setAttribute('aria-label', `Add a ${d} Vision Point chip`);
+    c.disabled = costOf(stake+d)>coins;
+    c.onclick=()=>{ stake+=d; tone(900,.03,'square',.02); renderSheet(); };
+    rack.appendChild(c);
+  }
+  const allIn = mode==='pond' ? Math.floor(coins/koi.length) : Math.floor(coins/(boosted&&mode==='single'?2:1));
+  for(const [label, fn, off] of [['All in', ()=>{ stake=allIn; toast('All in. Every point of sight you have is on the felt.'); }, allIn<=0 || stake===allIn],
+                                 ['Clear',  ()=>{ stake=0; }, stake<=0]]){
+    const t=document.createElement('button'); t.className='racktext'; t.textContent=label; t.disabled=off;
+    t.onclick=()=>{ fn(); renderSheet(); }; rack.appendChild(t);
+  }
+}
+
 $('go').onclick=()=>{
   if(coins<=0) return brokeModal();
   if(overLimit()) return;
@@ -657,6 +744,8 @@ $('go').onclick=()=>{
   const ins = mode==='parlay' && insured && gems>=2;
   if(ins) spendGems(2);
   coins-=cost; pellets--;
+  if(squints>0){ squints--; squinting=true; toast(`Squinting. You can see the pond for this race. ${squints} left.`); }
+  if(coins<Wallet.START/2) bump('dark');
   luckyThisRace = useLucky && luckyOwned>0; if(luckyThisRace) luckyOwned--; useLucky=false; insured=false;
   parlay = mode==='parlay' ? {leg:1, legs, insured:ins, pay:parlayPay(pick,legs,stake)} : null;
   bump('bets'); bump('stake', cost);
@@ -673,7 +762,7 @@ $('go').onclick=()=>{
 const chip = (label, tab, cls='') => `<button class="chip ${cls}" data-tab="${tab}">${label}</button>`;
 function updateHud(){
   $('coins').textContent=fmt(coins);
-  Wallet.see(coins);
+  Wallet.see(squinting ? Wallet.START : coins);  // a squint lends you full sight for one race
   const c=[chip(`◆ ${fmt(gems)}`,'wallet'), chip(`${pellets}/${MAX_PELLETS} pellets`,'wallet', pellets?'':'warn')];
   const [tier]=loyalty(), rest=[];
   if(credit) rest.push(chip(`${fmt(credit)} credit`,'wallet','gold'));
@@ -701,7 +790,7 @@ function showResult(html, ms, then){
 }
 function raceOver(winner){
   if(state!=='racing') return;
-  state='result'; races++;
+  state='result'; races++; squinting=false;
   const lucky = luckyThisRace ? '<small>Lucky pellet bonus applied: +0%</small>' : '';
   const vipLine = vip ? '<small>Lost in VIP style.</small>' : '';
   const wasReplay = !!replayOf; replayOf=null;
@@ -945,7 +1034,13 @@ function outOfPellets(){
 const ADS=[['Koi Max™','The only fish food that is also a fish.'],
            ['Pellet Pro','Nine out of ten koi could not be reached for comment.'],
            ['PondGuard+','Coverage for every fish, except the ones you have.'],
-           ['ClearWater Premium','See your pond like never before. Starting after this ad.']];
+           ['ClearWater Premium','See your pond like never before. Starting after this ad.'],
+           // the arcade advertises itself
+           ['Mystery booth','Coming soon to the arcade. Pre-order it with sight you have not lost yet.'],
+           ['The Locked Tent','Early access for Sight Club members. The flap opens for people who keep their eyes open.'],
+           ['Vision Points™','Now in 1, 5 and 10. Collect all three before your eyes give out.'],
+           ['20/20 Rewards','Earn one point for every point of sight you lose. Points expire when you do.'],
+           ['Arcade+','One subscription for every game. Fewer ads, same odds, and you lose your sight ad-free.']];
 let adTimer=null;
 // tag: the line above the ad. secs: how long before onEnd. count: label for the countdown, if any.
 function showAd({tag='Advertisement', secs=5, count='', failed=false, onEnd}){
@@ -1006,6 +1101,12 @@ function openShop(){
     {name:'Turbo pond', desc: turboOwned ? 'Owned. Toggle it on the bet sheet.'
       : `Bets place themselves, over and over, until you stop or run out. ${eta(15)}`,
       price: turboOwned ? 'Owned' : '15 gems', can:!turboOwned && gems>=15, buy:()=>{ spendGems(15); turboOwned=true; }},
+    {name:'Squint', desc:`See the pond clearly for your next race. Your sight is still gone afterward. You have ${squints}.`,
+      price:'4 gems', can:gems>=4, buy:()=>{ spendGems(4); squints++; }},
+    {name:'Eye drops', desc:'Restores up to 0 sight. Soothing, though.', price:'3 gems',
+      can:gems>=3, buy:()=>{ spendGems(3); toast('Your eyes feel cooler. You see exactly as much as before.'); }},
+    {name:'High-roller felt', desc:`The same table in a darker green, which is easier on tired eyes. ${eta(12)}`, price:'12 gems',
+      can:gems>=12, buy:()=>{ spendGems(12); toast('The felt is now slightly darker. So is everything else.'); }},
     {name:'Pond Pass VIP', desc: vip ? 'You’re VIP. Your losses now have gold trim.' : `Gold trim on every loss. That’s the whole benefit. ${eta(20)}`,
       price: vip ? 'Owned' : '20 gems', can:!vip && gems>=20, buy:()=>{ spendGems(20); vip=true; }},
   ];
@@ -1282,6 +1383,9 @@ const TICKS=[
   n=>`${n} is on a ${Math.floor(rand(9,40))}-race winning streak.`,
   n=>`${n} upgraded to Sight Club. Three others are considering it.`,
   n=>`A player near you cashed out. Details unavailable.`,
+  n=>`${n} just bet their peripheral vision on Beni.`,
+  n=>`${n} is down to ${Math.floor(rand(3,20))} sight and doubling.`,
+  n=>`${n} pushed a stack of blue chips onto Sumi.`,
 ];
 function tickerLine(){
   const n=RIVALS[Math.floor(Math.random()*RIVALS.length)];
@@ -1445,6 +1549,7 @@ const QUEST_POOL=[
   {id:'egg',   label:'Open a mystery egg',          target:1,   reward:1},
   {id:'ad',    label:'Watch 2 ads',                 target:2,   reward:1},
   {id:'buy',   label:'Make a purchase',             target:1,   reward:3},
+  {id:'dark',  label:'Bet 3 times with under 50 sight', target:3, reward:2},
 ];
 function rollQuests(){
   const day=new Date().toDateString();
@@ -1520,7 +1625,12 @@ $('fullX').onclick=()=>{ closeAd(); bump('ad'); if(turbo && state==='betting') s
 const PUSHES=['Hana misses you.','Your pellets are full. They will not stay full.',
   'Kenji_84 has passed you again.','Your offer expires in four minutes.',
   'You have unclaimed rewards. You do not, but you might.','Someone fed your koi. It was us.',
-  'We noticed you stopped. We notice everything.'];
+  'We noticed you stopped. We notice everything.',
+  'Your seat at the felt is still warm. Your chips are not.',
+  'Sight is 20% off today. Everything you spend it on is full price.',
+  'The Mystery booth opens soon. Your eyes may not be there to see it.',
+  'Someone at your table just went all in on Kuro.',
+  'Your vision is waiting. It is not getting any better.'];
 function pushNote(text){
   const el=$('push');
   el.innerHTML=`<b>Koi Pond Stakes · now</b>${text}`;
