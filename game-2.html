@@ -3,37 +3,606 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Mystery booth · Coming soon</title>
+<title>Bomb Sheet</title>
 <style>
-  :root { --bg:#9cbf7a; --ink:#173430; --caption:rgba(23,52,48,.75); --sheet:#f3efe2; --accent:#c9461a; --accent-ink:#fff; --hazard:#f2c230; color-scheme:light; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#22371d; --ink:#e6efe9; --caption:rgba(230,239,233,.7); --sheet:#1b2a22; --accent:#e8692c; --accent-ink:#1a0d06; --hazard:#c99d1e; color-scheme:dark; }
+  :root {
+    --bg: #9cbf7a; --ink: #173430; --caption: rgba(23,52,48,.75);
+    --sheet: #f3efe2; --sheet-ink: #173430; --line: rgba(23,52,48,.18);
+    --accent: #c9461a; --accent-ink: #fff; --win: #2f7a3a; --lose: #a8321a;
+    --gold: #a87a12; --backdrop: rgba(10,30,27,.45);
+    /* the spreadsheet itself */
+    --grid-head: #f0f0f0; --grid-text: #5f5f5f; --grid-line: rgba(0,0,0,.09); --grid-edge: #c8c8c8;
+    --select: #217346; --cell: #fff;
+    color-scheme: light;
   }
-  html, body { margin:0; min-height:100%; background:var(--bg); color:var(--ink);
-    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif; }
-  body { display:grid; place-items:center; min-height:100vh; padding:24px; box-sizing:border-box; }
-  .card { width:min(420px,100%); background:var(--sheet); border-radius:18px; padding:24px; text-align:center;
-    box-shadow:0 10px 30px rgba(0,0,0,.2); }
-  .tape { height:14px; margin:0 -24px 20px; background:repeating-linear-gradient(-45deg, var(--hazard) 0 14px, #222 14px 28px); }
-  h1 { margin:0 0 6px; font-size:26px; }
-  p { margin:0 0 16px; color:var(--caption); }
-  .purse { font-variant-numeric:tabular-nums; }
-  a { display:block; padding:12px; border-radius:12px; background:var(--accent); color:var(--accent-ink); text-decoration:none; font-weight:600; }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #22371d; --ink: #e6efe9; --caption: rgba(230,239,233,.7);
+      --sheet: #1b2a22; --sheet-ink: #e6efe9; --line: rgba(230,239,233,.16);
+      --accent: #e8692c; --accent-ink: #1a0d06; --win: #7fd08a; --lose: #f08a6c;
+      --gold: #e6c35c; --backdrop: rgba(0,0,0,.6);
+      --grid-head: #2b2b2b; --grid-text: #a8a8a8; --grid-line: rgba(0,0,0,.18); --grid-edge: #444;
+      --select: #4fbf7f; --cell: #1f1f1f;
+      color-scheme: dark;
+    }
+  }
+  html, body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--ink);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif; -webkit-tap-highlight-color:transparent; }
+  body { display:flex; flex-direction:column; height:100dvh; }
+  button, a { font:inherit; color:inherit; }
+  button { cursor:pointer; }
+  button:focus-visible, a:focus-visible, canvas:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+  .hud { flex:0 0 auto; display:flex; justify-content:space-between; align-items:flex-start;
+    padding:max(12px,env(safe-area-inset-top)) 18px 8px; }
+  .purse b { font-size:28px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .purse .unit { font-size:16px; margin-left:6px; }
+  .eyes { display:flex; align-items:center; gap:7px; margin-top:4px; font-size:13px; color:var(--caption); font-variant-numeric:tabular-nums; }
+  .meter { width:70px; height:6px; border-radius:3px; background:var(--line); overflow:hidden; }
+  .meter i { display:block; height:100%; background:var(--accent); transition:width .6s ease; }
+  .hudright { display:flex; align-items:center; gap:6px; }
+  .shopbtn { padding:8px 16px; border-radius:20px; border:0; background:var(--accent); color:var(--accent-ink); font-weight:600; font-size:16px; }
+  .homebtn { display:inline-flex; align-items:center; justify-content:center; width:36px; height:30px; box-sizing:border-box;
+    border-radius:15px; border:1px solid var(--caption); color:var(--caption); text-decoration:none; font-size:17px; }
+
+  /* Excel's name box and formula bar, sharp even when the sheet isn't */
+  .fbar { flex:0 0 auto; display:flex; align-items:stretch; margin:0 12px; height:26px; font-size:13px;
+    background:var(--cell); border:1px solid var(--grid-edge); border-bottom:0; border-radius:6px 6px 0 0; overflow:hidden;
+    font-family:ui-monospace,Menlo,Consolas,monospace; color:var(--ink); }
+  .namebox { flex:0 0 64px; display:flex; align-items:center; padding:0 8px; border-right:1px solid var(--grid-edge); }
+  .fx { flex:0 0 auto; display:flex; align-items:center; padding:0 8px; font-style:italic; color:var(--grid-text);
+    border-right:1px solid var(--grid-edge); font-family:Georgia,serif; }
+  .formula { flex:1; display:flex; align-items:center; gap:10px; padding:0 8px; white-space:nowrap; overflow:hidden; }
+  .formula b { font-weight:600; }
+  .formula .t { color:var(--win); } .formula .f { color:var(--lose); }
+
+  .wrap { flex:1; position:relative; margin:0 12px; min-height:0; border:1px solid var(--grid-edge); background:var(--grid-head); overflow:hidden; }
+  canvas { display:block; position:absolute; inset:0; width:100%; height:100%; touch-action:manipulation; cursor:cell; }
+  canvas.easing { transition:filter .9s ease; }
+  .vignette { position:absolute; inset:0; pointer-events:none; opacity:0; transition:opacity .9s ease;
+    background:radial-gradient(ellipse at 50% 50%, transparent 35%, rgba(0,0,0,.75) 100%); }
+  .caption { position:absolute; left:50%; top:10px; transform:translateX(-50%); margin:0; max-width:86%;
+    padding:5px 12px; border-radius:14px; background:var(--sheet); color:var(--sheet-ink); font-style:italic; font-size:15px;
+    box-shadow:0 2px 10px rgba(0,0,0,.18); pointer-events:none; text-align:center; }
+  .caption:empty { display:none; }
+
+  .status { flex:0 0 auto; display:flex; align-items:center; gap:14px; margin:0 12px; padding:10px 14px max(10px,env(safe-area-inset-bottom));
+    background:var(--sheet); color:var(--sheet-ink); border-radius:0 0 14px 14px; font-variant-numeric:tabular-nums; }
+  .status[hidden] { display:none; }
+  .status .stat { font-size:15px; } .status .stat b { font-size:20px; }
+  .status .clock.low b { color:var(--lose); }
+  .status button { margin-left:auto; padding:8px 12px; border-radius:12px; border:1.5px solid var(--accent); background:transparent; font-size:14px; }
+  .status button:disabled { opacity:.4; }
+
+  .sheet { position:fixed; z-index:10; left:0; right:0; bottom:0; background:var(--sheet); color:var(--sheet-ink);
+    border-radius:22px 22px 0 0; padding:16px 16px max(16px,env(safe-area-inset-bottom));
+    box-shadow:0 -6px 30px rgba(0,0,0,.18); transition:transform .35s ease; max-height:72vh; overflow-y:auto; }
+  .sheet.hidden { transform:translateY(110%); }
+  .sheet h2 { margin:0 0 4px; font-size:19px; font-weight:600; }
+  .sheet .terms { margin:0 0 10px; font-size:14px; opacity:.8; font-variant-numeric:tabular-nums; }
+  .row { display:flex; gap:8px; margin:10px 0; }
+  .row button { flex:1; padding:9px 4px; border:1.5px solid var(--line); border-radius:12px; background:transparent;
+    font-size:15px; font-variant-numeric:tabular-nums; }
+  .row button:disabled { opacity:.35; }
+  [aria-pressed="true"] { border-color:var(--accent) !important; box-shadow:inset 0 0 0 1.5px var(--accent); }
+  .row.seg { gap:0; border:1.5px solid var(--line); border-radius:12px; overflow:hidden; }
+  .row.seg button { border:0; border-left:1.5px solid var(--line); border-radius:0; font-size:14px; }
+  .row.seg button:first-child { border-left:0; }
+  .row.seg [aria-pressed="true"] { box-shadow:none; background:var(--accent); color:var(--accent-ink); font-weight:600; }
+  .go { display:block; width:100%; box-sizing:border-box; padding:13px; border:0; border-radius:14px; background:var(--accent); color:var(--accent-ink);
+    font-size:17px; font-weight:600; line-height:1.3; text-align:center; text-decoration:none; }
+  .go:disabled { opacity:.4; }
+  .smallprint { display:flex; justify-content:center; gap:18px; margin-top:10px; }
+  .smallprint button { border:0; background:none; padding:4px; font-size:13px; text-decoration:underline; opacity:.65; }
+
+  .result { position:fixed; z-index:15; left:50%; top:42%; transform:translate(-50%,-50%) scale(.9); opacity:0;
+    background:var(--sheet); color:var(--sheet-ink); padding:18px 24px; border-radius:18px; text-align:center;
+    box-shadow:0 10px 40px rgba(0,0,0,.25); transition:opacity .3s, transform .3s; pointer-events:none; width:min(300px,80vw); }
+  .result.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
+  .result strong { display:block; font-size:30px; margin:4px 0; font-variant-numeric:tabular-nums; }
+  .result small { display:block; font-size:14px; opacity:.8; margin-top:6px; line-height:1.4; }
+  .result .w { color:var(--win); } .result .l { color:var(--lose); }
+
+  .backdrop { position:fixed; inset:0; z-index:20; background:var(--backdrop); display:flex; align-items:center; justify-content:center; padding:20px; }
+  .backdrop[hidden] { display:none; }
+  .card { background:var(--sheet); color:var(--sheet-ink); border-radius:20px; padding:20px; width:min(360px,100%);
+    max-height:80vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,.3); }
+  .card h3 { margin:0 0 8px; font-size:21px; }
+  .card p { margin:0 0 10px; line-height:1.45; }
+  .card .fine { font-size:13px; font-style:italic; opacity:.7; }
+  .item { display:flex; gap:12px; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--line); }
+  .item p { margin:2px 0 0; font-size:14px; opacity:.8; }
+  .item button { flex:0 0 auto; padding:8px 12px; border-radius:10px; border:1.5px solid var(--accent); background:transparent; font-size:14px; white-space:nowrap; }
+  .item button:disabled { opacity:.35; }
+  .actions { display:flex; flex-direction:column; gap:8px; margin-top:14px; }
+  .actions button { padding:12px; border-radius:12px; border:1.5px solid var(--line); background:transparent; font-size:16px; }
+  .actions button.primary { background:var(--accent); color:var(--accent-ink); border-color:transparent; font-weight:600; }
+
+  .toast { position:fixed; z-index:30; left:50%; top:calc(max(12px,env(safe-area-inset-top)) + 64px); transform:translate(-50%,-20px);
+    opacity:0; background:var(--ink); color:var(--sheet); padding:8px 14px; border-radius:12px; font-size:14px;
+    transition:opacity .25s, transform .25s; pointer-events:none; width:max-content; max-width:86vw; text-align:center; }
+  .toast.show { opacity:1; transform:translate(-50%,0); }
+  @media (prefers-reduced-motion: reduce) {
+    .sheet, .result, .toast, .meter i, .vignette { transition:none; } canvas.easing { transition:none; }
+  }
 </style>
 </head>
 <body>
-<main class="card">
-  <div class="tape" aria-hidden="true"></div>
-  <h1>Mystery booth</h1>
-  <p>Something is being built behind the tape. Coming soon.</p>
-  <p class="purse">Your arcade purse: <b id="coins">…</b> coins</p>
-  <a href="home.html">Back to the arcade</a>
-</main>
+<header class="hud">
+  <div class="purse">
+    <b id="coins">100</b><span class="unit">coins</span>
+    <div class="eyes"><span>Vision</span><span class="meter"><i id="visionBar"></i></span><span id="visionPct">100%</span></div>
+  </div>
+  <div class="hudright">
+    <button class="shopbtn" id="shopBtn">Eye care</button>
+    <a class="homebtn" href="home.html" aria-label="Back to the arcade">⌂</a>
+  </div>
+</header>
+
+<div class="fbar" aria-live="polite">
+  <span class="namebox" id="nameBox">A1</span><span class="fx">fx</span><span class="formula" id="formula"></span>
+</div>
+<div class="wrap" id="wrap">
+  <canvas id="board" tabindex="0" aria-label="Spreadsheet with a fractal drawn in it. Bombs are hidden in some cells."></canvas>
+  <div class="vignette" id="vignette"></div>
+  <p class="caption" id="caption"></p>
+</div>
+<footer class="status" id="status">
+  <span class="stat">Bombs <b id="found">0/6</b></span>
+  <span class="stat clock" id="clockWrap"><b id="clock">0:50</b></span>
+  <button id="squintBtn">Squint, 15 coins</button>
+</footer>
+
+<section class="sheet" id="sheet" aria-label="Place a bet">
+  <h2>Find every bomb before the clock runs out</h2>
+  <p class="terms" id="terms"></p>
+  <div class="row seg" id="fractalRow"></div>
+  <div class="row" id="amounts"></div>
+  <button class="go" id="go">Bet</button>
+  <div class="smallprint">
+    <button id="howBtn">How it works</button>
+    <button id="footBtn">Play responsibly</button>
+  </div>
+</section>
+
+<div class="result" id="result" role="status" aria-live="polite"></div>
+<div class="backdrop" id="modal" hidden><div class="card" id="card" role="dialog" aria-modal="true"></div></div>
+<div class="toast" id="toast" role="status"></div>
+
 <script src="wallet.js"></script>
+<script src="vision.js"></script>
 <script>
-// When this game is built: read coins with Wallet.get(), and write them back with
-// Wallet.set(n) / Wallet.add(n) / Wallet.spend(n). See wallet.js.
-document.getElementById('coins').textContent = Wallet.get().toLocaleString('en-US');
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const coarse = matchMedia('(pointer: coarse)').matches;
+const rand = (a,b) => a + Math.random()*(b-a);
+const pickOne = a => a[Math.floor(Math.random()*a.length)];
+const fmt = n => Math.floor(n).toLocaleString('en-US');
+const canvas = $('board'), ctx = canvas.getContext('2d');
+
+// ---- the house ----
+const BOMBS=6, MULT=25, FEE=.1;          // the bet sheet shows MULT; FEE comes off afterwards
+const HOUSE_SECOND=1.15;                 // the clock ticks 15% fast. see the fine print
+const MISS_PENALTY=3, SQUINT_COST=15, SQUINT_MS=5000;
+const AMOUNTS=[10,25,50,'All in'];
+const visionCost = st => Math.min(30, Math.max(4, Math.round(Math.sqrt(st)*2)));
+const clockFor = v => Math.round(30 + 20*v/100);                 // blurry eyes get less time
+// how far a bomb's shade sits from where it should be. bigger stakes, subtler bombs
+const stakeFactor = st => Math.max(.35, Math.min(1, 1 - Math.log10(Math.max(st,10)/10)*.45));
+const subtlety = (st, v) => stakeFactor(st) * (.3 + .7*v/100);
+const HUE_SHIFT=6;                        // degrees, at the very best
+const shadeText = f => (HUE_SHIFT*f/3.6).toFixed(1)+'%';
+
+// ---- fractals, each with a few windows worth looking through ----
+const FRACTALS = {
+  mandelbrot:{ name:'Mandelbrot', fn:'MANDELBROT', views:[[-.75,0,3.1],[-.745,.11,.28],[-1.25,.02,.2],[-.16,1.035,.12],[.29,.015,.1],[-.53,.6,.3]] },
+  julia:     { name:'Julia', fn:'JULIA', c:[-.123,.745], views:[[0,0,3.0],[0,0,1.8],[-.25,.25,1.0]] },
+  ship:      { name:'Burning ship', fn:'BURNINGSHIP', views:[[-.45,-.5,3.3],[-1.76,-.035,.14],[-1.6,-.02,.6]] },
+  tricorn:   { name:'Tricorn', fn:'TRICORN', views:[[-.3,0,3.6],[-1.15,.25,.7]] },
+};
+const MAXIT=200;
+function escape(kind, x, y){
+  const f=FRACTALS[kind];
+  let zr, zi, cr, ci;
+  if(kind==='julia'){ zr=x; zi=y; [cr,ci]=f.c; } else { zr=0; zi=0; cr=x; ci=y; }
+  for(let n=0; n<MAXIT; n++){
+    const r2=zr*zr, i2=zi*zi;
+    if(r2+i2>16) return n + 1 - Math.log(Math.log(r2+i2)/2/Math.LN2)/Math.LN2;
+    let nr, ni;
+    if(kind==='ship'){ const ar=Math.abs(zr), ai=Math.abs(zi); nr=ar*ar-ai*ai+cr; ni=2*ar*ai+ci; }
+    else if(kind==='tricorn'){ nr=r2-i2+cr; ni=-2*zr*zi+ci; }
+    else { nr=r2-i2+cr; ni=2*zr*zi+ci; }
+    zr=nr; zi=ni;
+  }
+  return -1; // in the set
+}
+
+// Excel's green-yellow-red colour scale, the one in Conditional Formatting
+const SCALE=[[99,190,123],[255,235,132],[248,105,107]];
+function scale(t){
+  const s=t<.5?0:1, u=t<.5?t*2:(t-.5)*2, a=SCALE[s], b=SCALE[s+1];
+  return [0,1,2].map(i=>Math.round(a[i]+(b[i]-a[i])*u));
+}
+function rgb2hsl([r,g,b]){
+  r/=255; g/=255; b/=255;
+  const mx=Math.max(r,g,b), mn=Math.min(r,g,b), l=(mx+mn)/2;
+  if(mx===mn) return [0,0,l];
+  const d=mx-mn, s=l>.5 ? d/(2-mx-mn) : d/(mx+mn);
+  const h = mx===r ? (g-b)/d+(g<b?6:0) : mx===g ? (b-r)/d+2 : (r-g)/d+4;
+  return [h*60,s,l];
+}
+function hsl2rgb([h,s,l]){
+  h=((h%360)+360)%360/360;
+  if(!s){ const v=Math.round(l*255); return [v,v,v]; }
+  const q=l<.5 ? l*(1+s) : l+s-l*s, p=2*l-q;
+  const hue=t=>{ t=(t+1)%1; return t<1/6 ? p+(q-p)*6*t : t<1/2 ? q : t<2/3 ? p+(q-p)*(2/3-t)*6 : p; };
+  return [hue(h+1/3),hue(h),hue(h-1/3)].map(v=>Math.round(v*255));
+}
+const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+
+// ---- state ----
+let coins=Wallet.get(), vision=Vision.get();
+let fractal='mandelbrot', stake=10, state='betting'; // betting | playing | result
+let grid=null;          // {cols, rows, kind, cells:[{c:[r,g,b], inside, busy}]}
+let bombs=[], sel={c:0,r:0}, timeLeft=0, lastTick=0, squintUntil=0, squinted=false, revealing=false;
+let rounds=0, wins=0, drops=0, warned=false;
+const SAVE='arcade.bombsheet.v1';
+function save(){
+  try { localStorage.setItem(SAVE, JSON.stringify({fractal, stake, rounds, wins, drops, warned})); } catch(e){}
+}
+function load(){
+  let d; try { d=JSON.parse(localStorage.getItem(SAVE)||'null'); } catch(e){}
+  if(!d) return;
+  const num=(v,f)=>typeof v==='number' && isFinite(v) ? v : f;
+  if(FRACTALS[d.fractal]) fractal=d.fractal;
+  stake=num(d.stake,stake); rounds=num(d.rounds,0); wins=num(d.wins,0); drops=num(d.drops,0); warned=!!d.warned;
+}
+
+// ---- the board ----
+const RH=() => 30, CH=() => 18;  // row header width, column header height
+function colName(i){ let s=''; i++; while(i>0){ const m=(i-1)%26; s=String.fromCharCode(65+m)+s; i=Math.floor((i-1)/26); } return s; }
+const ref = (c,r) => colName(c)+(r+1);
+let W=0, H=0;
+
+function measure(){
+  const w=$('wrap'), d=Math.min(devicePixelRatio||1, 2);
+  W=w.clientWidth; H=w.clientHeight;
+  canvas.width=Math.round(W*d); canvas.height=Math.round(H*d); ctx.setTransform(d,0,0,d,0,0);
+}
+function cellSize(){ return grid ? Math.min((W-RH())/grid.cols, (H-CH())/grid.rows) : 12; }
+
+function newBoard(){
+  const target = coarse ? 13 : 11;
+  const cols=Math.max(18, Math.min(80, Math.floor((W-RH())/target)));
+  const cs=(W-RH())/cols, rows=Math.max(12, Math.floor((H-CH())/cs));
+  const f=FRACTALS[fractal];
+  // try a few windows and keep the one with the most edge in it to hide things in
+  let best=null;
+  for(let tries=0; tries<6; tries++){
+    const [cx,cy,w0]=pickOne(f.views), w=w0*rand(.85,1.15), h=w*rows/cols;
+    const ox=cx+rand(-.05,.05)*w, oy=cy+rand(-.05,.05)*h;
+    const mu=[];
+    for(let r=0;r<rows;r++) for(let c=0;c<cols;c++)
+      mu.push(escape(fractal, ox-w/2+(c+.5)*w/cols, oy-h/2+(r+.5)*h/rows));
+    const cells=shade(mu), inside=cells.filter(x=>x.inside).length;
+    busyness(cells, cols, rows);
+    const score=cells.filter(x=>x.busy>40).length * (inside>4 && inside<mu.length*.55 ? 1 : .2);
+    if(!best || score>best.score) best={cells, score};
+  }
+  grid={cols, rows, kind:fractal, cells:best.cells};
+  bombs=[];
+  sel={c:Math.floor(cols/2), r:Math.floor(rows/2)};
+  idleFormula();
+  draw();
+}
+
+// Excel's percentile colour scale: every colour gets the same number of cells
+function shade(mu){
+  const out=mu.filter(m=>m>=0).sort((a,b)=>a-b), n=out.length;
+  const rank=m=>{ let lo=0, hi=n; while(lo<hi){ const mid=(lo+hi)>>1; if(out[mid]<m) lo=mid+1; else hi=mid; } return n>1 ? lo/(n-1) : 0; };
+  return mu.map(m=>m<0 ? {c:[0,0,0], inside:true} : {c:scale(rank(m)), inside:false});
+}
+// how much each cell differs from its neighbours. the house hides bombs where this is high
+function busyness(cells, cols, rows){
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+    const me=cells[r*cols+c]; let busy=0;
+    for(const [dc,dr] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      if(c+dc<0||c+dc>=cols||r+dr<0||r+dr>=rows) continue;
+      const n=cells[(r+dr)*cols+(c+dc)];
+      busy+=Math.abs(n.c[0]-me.c[0])+Math.abs(n.c[1]-me.c[1])+Math.abs(n.c[2]-me.c[2]);
+    }
+    me.busy=busy;
+  }
+}
+
+function plant(){
+  const {cols, rows, cells}=grid, f=subtlety(stake, vision);
+  const far = (c,r) => bombs.every(b=>Math.max(Math.abs(b.c-c),Math.abs(b.r-r))>=4);
+  const edge = (c,r) => c<1||r<1||c>=cols-1||r>=rows-1;
+  const coloured=[], black=[];
+  cells.forEach((cell,i)=>{ const c=i%cols, r=Math.floor(i/cols); if(edge(c,r)) return;
+    (cell.inside ? black : coloured).push({c, r, busy:cell.busy}); });
+  coloured.sort((a,b)=>b.busy-a.busy);
+  const pool=coloured.slice(0, Math.max(BOMBS*4, Math.floor(coloured.length*.25)));
+  bombs=[];
+  // one always goes in the black, where a shade is a matter of opinion
+  const deep=black.filter(p=>{ const nb=[[1,0],[-1,0],[0,1],[0,-1]]; return nb.every(([dc,dr])=>cells[(p.r+dr)*cols+p.c+dc].inside); });
+  if(deep.length){ const p=pickOne(deep); const k=Math.max(2, Math.round(5*f));
+    bombs.push({c:p.c, r:p.r, found:false, was:[0,0,0], is:[k,k,k], dark:true}); }
+  let guard=0;
+  while(bombs.length<BOMBS && guard++<2000){
+    const p=pickOne(guard<1500 ? pool : coloured); if(!p || !far(p.c,p.r)) continue;
+    const cell=cells[p.r*cols+p.c], [h,s,l]=rgb2hsl(cell.c), sign=Math.random()<.5?-1:1;
+    const is=hsl2rgb([h+sign*HUE_SHIFT*f, s, Math.max(0,Math.min(1, l+(Math.random()<.5?-1:1)*.008*f))]);
+    bombs.push({c:p.c, r:p.r, found:false, was:cell.c, is});
+  }
+}
+const bombAt = (c,r) => bombs.find(b=>b.c===c && b.r===r);
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  if(!grid) return;
+  const {cols, rows, cells}=grid, cs=cellSize(), x0=RH(), y0=CH();
+  ctx.fillStyle=css('--cell'); ctx.fillRect(x0,y0,W-x0,H-y0);
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+    const b=bombAt(c,r);
+    ctx.fillStyle=rgb(b ? b.is : cells[r*cols+c].c);
+    ctx.fillRect(x0+c*cs, y0+r*cs, Math.ceil(cs), Math.ceil(cs));
+  }
+  // gridlines
+  ctx.strokeStyle=css('--grid-line'); ctx.lineWidth=1; ctx.beginPath();
+  for(let c=0;c<=cols;c++){ const x=Math.round(x0+c*cs)+.5; ctx.moveTo(x,y0); ctx.lineTo(x,y0+rows*cs); }
+  for(let r=0;r<=rows;r++){ const y=Math.round(y0+r*cs)+.5; ctx.moveTo(x0,y); ctx.lineTo(x0+cols*cs,y); }
+  ctx.stroke();
+  // bombs: found ones get drawn, the rest only when the round is over
+  for(const b of bombs){
+    const cx=x0+(b.c+.5)*cs, cy=y0+(b.r+.5)*cs;
+    if(b.found){
+      ctx.fillStyle='#1b1b1b'; ctx.strokeStyle='#fff'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.arc(cx, cy+cs*.08, cs*.62, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle='#f2c230'; ctx.lineWidth=2; ctx.beginPath();
+      ctx.moveTo(cx+cs*.35, cy-cs*.35); ctx.lineTo(cx+cs*.7, cy-cs*.75); ctx.stroke();
+    } else if(revealing){
+      ctx.strokeStyle='#e0261b'; ctx.lineWidth=2.5;
+      ctx.beginPath(); ctx.arc(cx, cy, cs*1.6, 0, Math.PI*2); ctx.stroke();
+    }
+  }
+  // headers
+  const head=css('--grid-head'), text=css('--grid-text'), edgeC=css('--grid-edge');
+  ctx.fillStyle=head; ctx.fillRect(0,0,W,y0); ctx.fillRect(0,0,x0,H);
+  ctx.fillStyle=text; ctx.font='10px ui-sans-serif, system-ui, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  const everyC=Math.ceil(18/cs), everyR=Math.ceil(13/cs);
+  for(let c=0;c<cols;c+=everyC) ctx.fillText(colName(c), x0+(c+.5)*cs, y0/2);
+  for(let r=0;r<rows;r+=everyR) ctx.fillText(r+1, x0/2, y0+(r+.5)*cs);
+  ctx.strokeStyle=edgeC; ctx.lineWidth=1; ctx.beginPath();
+  ctx.moveTo(0,y0+.5); ctx.lineTo(W,y0+.5); ctx.moveTo(x0+.5,0); ctx.lineTo(x0+.5,H); ctx.stroke();
+  // the selected cell, Excel green
+  if(state==='playing' || revealing){
+    ctx.strokeStyle=css('--select'); ctx.lineWidth=2;
+    ctx.strokeRect(x0+sel.c*cs-1, y0+sel.r*cs-1, cs+2, cs+2);
+  }
+}
+
+// ---- vision ----
+function applyVision(){
+  const k = revealing ? 0 : Date.now()<squintUntil ? .5 : 1;
+  canvas.style.filter=Vision.filter(vision, k);
+  $('vignette').style.opacity=Vision.vignette(vision, k);
+  $('visionBar').style.width=vision+'%';
+  $('visionPct').textContent=Math.round(vision)+'%';
+}
+function loseVision(n){
+  vision=Vision.add(-n); applyVision();
+  if(!warned && vision<60){ warned=true; save(); setTimeout(()=>toast('Your vision is now below the arcade average.'), 1200); }
+}
+
+// ---- formula bar ----
+function setFormula(name, f, result){
+  $('nameBox').textContent=name;
+  $('formula').innerHTML = `<span>${f}</span>` + (result ? `<b class="${result==='TRUE'?'t':'f'}">${result}</b>` : '');
+}
+function idleFormula(){
+  if(!grid) return;
+  setFormula('A1', `=${FRACTALS[grid.kind].fn}(A1:${ref(grid.cols-1, grid.rows-1)})`);
+}
+
+// ---- betting ----
+function say(text, ms){ $('caption').textContent=text; clearTimeout(say.t); if(ms) say.t=setTimeout(()=>$('caption').textContent='', ms); }
+function toast(text){ const t=$('toast'); t.textContent=text; t.classList.add('show');
+  clearTimeout(toast.t); toast.t=setTimeout(()=>t.classList.remove('show'), 2600); }
+function updateHud(){ $('coins').textContent=fmt(coins); applyVision(); }
+
+function toggleRow(el, options, current, onPick){
+  el.innerHTML='';
+  for(const [label, value, disabled] of options){
+    const b=document.createElement('button'); b.textContent=label; b.disabled=!!disabled;
+    b.setAttribute('aria-pressed', value===current);
+    b.onclick=()=>{ onPick(value); renderSheet(); };
+    el.appendChild(b);
+  }
+}
+function renderSheet(){
+  updateStatus();
+  toggleRow($('fractalRow'), Object.entries(FRACTALS).map(([k,f])=>[f.name,k]), fractal, v=>{
+    if(v===fractal) return; fractal=v; save(); newBoard();
+    toast('Changing the fractal is free. The odds are the same in all of them.'); });
+  if(stake>coins) stake=Math.min(10, coins);
+  toggleRow($('amounts'), AMOUNTS.map(a=>{ const v=a==='All in'?coins:a; return [a, v, v>coins||v<=0]; }), stake, v=>{ stake=v; save(); });
+  const f=subtlety(stake, vision);
+  $('terms').textContent = `${BOMBS} bombs · ${clockFor(vision)} seconds · shade difference ${shadeText(f)} · losing costs ${visionCost(stake)}% vision`;
+  const go=$('go');
+  if(coins<=0){ go.disabled=false; go.textContent='Out of coins. Back to the arcade'; go.onclick=()=>location.href='home.html'; return; }
+  go.onclick=start;
+  go.disabled = stake<=0 || stake>coins;
+  go.textContent = `Bet ${fmt(stake)} to win ${fmt(stake*MULT)}`;
+}
+
+function start(){
+  if(state!=='betting' || stake<=0 || !Wallet.spend(stake)) return;
+  coins=Wallet.get(); rounds++; save();
+  plant();
+  timeLeft=clockFor(vision); squinted=false; squintUntil=0;
+  state='playing';
+  $('sheet').classList.add('hidden');
+  $('squintBtn').disabled = coins<SQUINT_COST;
+  updateHud(); updateStatus(); draw();
+  say(`Find ${BOMBS} cells a shade off from their neighbours`, 2600);
+  canvas.focus({preventScroll:true});
+  lastTick=performance.now(); requestAnimationFrame(tick);
+}
+
+function updateStatus(){
+  // between rounds the bar previews the next one
+  const betting=state==='betting';
+  const found=betting ? 0 : bombs.filter(b=>b.found).length, s=Math.max(0, Math.ceil(betting ? clockFor(vision) : timeLeft));
+  if(betting) $('squintBtn').disabled=true;
+  $('found').textContent=`${found}/${BOMBS}`;
+  $('clock').textContent=`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+  $('clockWrap').classList.toggle('low', s<=10);
+}
+
+function tick(now){
+  if(state!=='playing') return;
+  timeLeft -= (now-lastTick)/1000*HOUSE_SECOND; lastTick=now;
+  if(squintUntil && Date.now()>=squintUntil){ squintUntil=0; applyVision(); }
+  updateStatus();
+  if(timeLeft<=0) return lose();
+  requestAnimationFrame(tick);
+}
+
+function check(c, r){
+  if(state!=='playing') return;
+  sel={c,r};
+  const b=bombAt(c,r), name=ref(c,r), f=`=ISBOMB(${name})`;
+  if(b && b.found){ setFormula(name, f, 'TRUE'); say('Already found that one', 1400); draw(); return; }
+  if(b){
+    b.found=true; setFormula(name, f, 'TRUE');
+    const left=bombs.filter(x=>!x.found).length;
+    say(left ? `${left} to go` : 'That’s all of them', 1400);
+    draw(); updateStatus();
+    if(!left) win();
+    return;
+  }
+  timeLeft-=MISS_PENALTY;
+  const near=bombs.some(x=>!x.found && Math.max(Math.abs(x.c-c),Math.abs(x.r-r))<=1);
+  setFormula(name, f, 'FALSE');
+  say(near ? `So close. That was right next to one. −${MISS_PENALTY}s` : `Not a bomb. −${MISS_PENALTY}s`, 1500);
+  draw(); updateStatus();
+}
+
+// ---- results ----
+function showResult(html, ms, then){
+  const r=$('result'); r.innerHTML=html; r.classList.add('show'); say('');
+  setTimeout(()=>{ r.classList.remove('show'); then(); }, ms);
+}
+function win(){
+  state='result'; wins++;
+  const gross=stake*MULT, fee=Math.round(gross*FEE);
+  coins=Wallet.add(stake+gross-fee); vision=Vision.add(2); save(); updateHud();
+  setFormula('', `=SUM(winnings)-booth_fee`);
+  showResult(`Every bomb found<strong class="w">+${fmt(gross-fee)}</strong>
+    <small>Less a ${fmt(fee)} booth maintenance fee, charged on winnings only. Your eyes recover 2%.</small>`, 3400, endRound);
+}
+function lose(){
+  state='result'; timeLeft=0; updateStatus();
+  const found=bombs.filter(b=>b.found).length, cost=visionCost(stake);
+  const dark=bombs.find(b=>b.dark && !b.found);
+  setFormula('', `=COUNTIF(${'A1:'+ref(grid.cols-1, grid.rows-1)},"bomb")`, String(BOMBS));
+  // for a moment, everything is clear, so you can see how close they were
+  revealing=true; canvas.classList.add('easing'); applyVision(); draw();
+  const close = found===BOMBS-1 ? `<small>${found} of ${BOMBS}. One bomb away from ${fmt(stake*MULT)}!</small>` : `<small>${found} of ${BOMBS} found.</small>`;
+  const note = dark ? `<small>One was in the black, ${Math.round(dark.is[0]/2.55*10)/10}% lighter than black. Technically visible.</small>` : '';
+  showResult(`Time’s up<strong class="l">−${fmt(stake)}</strong>${close}${note}<small>Your vision drops ${cost}%.</small>`, 4200, ()=>{
+    revealing=false; loseVision(cost); draw();
+    setTimeout(()=>canvas.classList.remove('easing'), 1000);
+    endRound();
+  });
+}
+function endRound(){
+  state='betting'; squintUntil=0;
+  newBoard(); updateStatus();
+  renderSheet(); updateHud();
+  $('sheet').classList.remove('hidden');
+  if(coins<=0) setTimeout(broke, 500);
+  else if(rounds%3===0 && vision<90) setTimeout(()=>toast('Eye drops are back in stock.'), 800);
+}
+
+// ---- eye care ----
+const dropPrice = () => Math.round(40*Math.pow(1.5, drops));
+function openModal(html, buttons){
+  $('card').innerHTML=html;
+  const acts=document.createElement('div'); acts.className='actions';
+  for(const b of buttons){ const el=document.createElement('button'); el.textContent=b.label;
+    if(b.primary) el.className='primary'; el.disabled=!!b.disabled; el.onclick=b.onClick; acts.appendChild(el); }
+  $('card').appendChild(acts); $('modal').hidden=false;
+  ($('card').querySelector('.item button:not(:disabled)') || acts.querySelector('button')).focus();
+}
+function closeModal(){ $('modal').hidden=true; renderSheet(); updateHud(); }
+function shop(){
+  const p=dropPrice();
+  openModal(`<h3>Eye care</h3>
+    <p>Your vision is ${Math.round(vision)}%. ${vision<60 ? 'That is below the arcade average.' : 'For now.'}</p>
+    <div class="item"><div><b>Eye drops</b><p>+5% vision. The price goes up every time you buy.</p></div>
+      <button id="buyDrops" ${coins<p||vision>=100?'disabled':''}>${fmt(p)} coins</button></div>
+    <div class="item"><div><b>Squint</b><p>Halves the blur for 5 seconds. One per round, during a round.</p></div>
+      <button disabled>${SQUINT_COST} coins</button></div>
+    <p class="fine">Prices are in coins, and coins are pretend. There’s no real money anywhere in the arcade.</p>`,
+    [{label:'Close', onClick:closeModal}]);
+  const b=$('buyDrops');
+  if(b) b.onclick=()=>{ if(!Wallet.spend(p)) return; coins=Wallet.get(); drops++;
+    vision=Vision.add(5); save(); updateHud(); toast('+5% vision. Everything looks a little more winnable.'); shop(); };
+}
+$('shopBtn').onclick=()=>{ if(state==='playing') return toast('Eye care is closed while the clock is running.'); shop(); };
+$('squintBtn').onclick=()=>{
+  if(state!=='playing' || squinted || !Wallet.spend(SQUINT_COST)) return;
+  coins=Wallet.get(); squinted=true; squintUntil=Date.now()+SQUINT_MS;
+  $('squintBtn').disabled=true; updateHud(); say('Squinting', 1200);
+};
+function broke(){
+  openModal(`<h3>Out of coins</h3><p>The bombs will still be here. The koi pond has coins, and opinions about how you get them.</p>`,
+    [{label:'Back to the arcade', primary:true, onClick:()=>location.href='home.html'}, {label:'Stay and look at the fractal', onClick:closeModal}]);
+}
+$('howBtn').onclick=()=>openModal(`<h3>How it works</h3>
+  <p>${BOMBS} cells in the sheet are a shade off from where the fractal says they should be. Tap each one before the clock runs out.</p>
+  <p>A wrong cell costs ${MISS_PENALTY} seconds. Find all ${BOMBS} and win ${MULT}× your stake, less a booth fee.</p>
+  <p>Lose, and your vision drops. Less vision means a blurrier sheet, a shorter clock, and fainter bombs, in this game and the next.</p>
+  <p class="fine">Bigger stakes hide the bombs better. One bomb is always somewhere very dark. Seconds are house seconds, which are ${Math.round((HOUSE_SECOND-1)*100)}% shorter. Rounds played: ${rounds}. Rounds won: ${wins}.</p>`,
+  [{label:'Got it', primary:true, onClick:closeModal}]);
+$('footBtn').onclick=()=>openModal(`<h3>Play responsibly</h3>
+  <p>Vision here is a number saved in your browser. Your actual eyes are fine.</p>
+  <p class="fine">This game does not offer real money gambling, and does not predict success at real money gambling.</p>`,
+  [{label:'Reset my vision to 100%', primary:true, onClick:()=>{ vision=100; Vision.set(100); closeModal(); toast('Vision reset. It was always just a number.'); }},
+   {label:'Close', onClick:closeModal}]);
+$('modal').addEventListener('click', e=>{ if(e.target===$('modal')) closeModal(); });
+
+// ---- input ----
+canvas.addEventListener('click', e=>{
+  if(state!=='playing' || !grid) return;
+  const rect=canvas.getBoundingClientRect(), cs=cellSize();
+  const c=Math.floor((e.clientX-rect.left-RH())/cs), r=Math.floor((e.clientY-rect.top-CH())/cs);
+  if(c<0||r<0||c>=grid.cols||r>=grid.rows) return;
+  check(c, r);
+});
+// arrow keys move the selection like a spreadsheet, Enter checks the cell
+canvas.addEventListener('keydown', e=>{
+  if(state!=='playing' || !grid) return;
+  const mv={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
+  if(mv){ e.preventDefault();
+    sel={c:Math.max(0,Math.min(grid.cols-1, sel.c+mv[0])), r:Math.max(0,Math.min(grid.rows-1, sel.r+mv[1]))};
+    setFormula(ref(sel.c,sel.r), `=ISBOMB(${ref(sel.c,sel.r)})`); draw(); }
+  else if(e.key==='Enter' || e.key===' '){ e.preventDefault(); check(sel.c, sel.r); }
+});
+addEventListener('keydown', e=>{ if(e.key==='Escape' && !$('modal').hidden) closeModal(); });
+new ResizeObserver(()=>{ measure(); if(!grid) newBoard(); else draw(); }).observe($('wrap'));
+const matchDark=matchMedia('(prefers-color-scheme: dark)'); matchDark.addEventListener('change', draw);
+Wallet.onChange(n=>{ coins=n; updateHud(); if(state==='betting') renderSheet(); });
+Vision.onChange(v=>{ vision=v; updateHud(); if(state==='betting') renderSheet(); });
+addEventListener('pageshow', ()=>{ coins=Wallet.get(); vision=Vision.get(); updateHud(); if(state==='betting') renderSheet(); });
+
+// ---- boot ----
+load();
+measure(); newBoard(); renderSheet(); updateHud();
 </script>
 </body>
 </html>

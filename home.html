@@ -105,14 +105,17 @@
   </a>
 
   <a class="station" id="st-game-2" href="game-2.html" data-id="game-2">
-    <svg width="90" height="80" viewBox="-45 -40 90 80" aria-hidden="true">
-      <rect x="-34" y="-12" width="68" height="46" rx="3" fill="var(--wood)"/>
-      <path d="M-42 -10 L0 -38 L42 -10 Z" fill="var(--wood-dark)"/>
-      <rect x="-12" y="8" width="24" height="26" fill="var(--wood-dark)"/>
-      <g><rect x="-40" y="2" width="80" height="9" fill="var(--hazard)" transform="rotate(-8)"/>
-        <path d="M-34 2 l6 9 M-20 2 l6 9 M-6 2 l6 9 M8 2 l6 9 M22 2 l6 9" stroke="#222" stroke-width="4" transform="rotate(-8)"/></g>
+    <svg width="96" height="80" viewBox="-48 -40 96 80" aria-hidden="true">
+      <g transform="rotate(-6)">
+        <rect x="-40" y="-30" width="80" height="60" rx="3" fill="#fff" stroke="var(--wood-dark)" stroke-width="3"/>
+        <rect x="-40" y="-30" width="80" height="9" fill="#e9e9e9"/><rect x="-40" y="-30" width="9" height="60" fill="#e9e9e9"/>
+        <rect x="-31" y="-21" width="71" height="51" fill="#63be7b"/>
+        <ellipse cx="6" cy="5" rx="22" ry="17" fill="#ffeb84"/><ellipse cx="6" cy="5" rx="14" ry="11" fill="#f8696b"/>
+        <circle cx="-2" cy="5" r="8" fill="#111"/><circle cx="12" cy="5" r="5" fill="#111"/>
+        <path d="M-31 -11 H40 M-31 -1 H40 M-31 9 H40 M-31 19 H40 M-21 -21 V30 M-11 -21 V30 M-1 -21 V30 M9 -21 V30 M19 -21 V30 M29 -21 V30" stroke="rgba(0,0,0,.12)" stroke-width="1"/>
+      </g>
     </svg>
-    <span class="label">Mystery booth<span class="soon">Coming soon</span></span>
+    <span class="label">Bomb Sheet</span>
   </a>
 
   <a class="station" id="st-game-3" href="game-3.html" data-id="game-3">
@@ -146,8 +149,8 @@ const fmt = n => Math.floor(n).toLocaleString('en-US');
 
 // Add a game: give it its own .html file, a station in the markup, and an entry here.
 const GAMES = [
-  { id:'game-2', file:'game-2.html', name:'Mystery booth', ready:false,
-    desc:'Something is being built behind the tape. Your coins will work here too.' },
+  { id:'game-2', file:'game-2.html', name:'Bomb Sheet', ready:true,
+    desc:'Six bombs hide in a fractal spreadsheet, each a shade off from its neighbours. Find them before the clock runs out. Losing costs coins and a little of your vision.' },
   { id:'coypond', file:'index.html', name:'Koi Pond Stakes', ready:true,
     desc:'Bet on which koi eats the pellet first. Coins you win come back to the arcade with you.' },
   { id:'game-3', file:'game-3.html', name:'Locked tent', ready:false,
