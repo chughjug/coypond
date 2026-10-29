@@ -10,6 +10,7 @@
 //   Wallet.onChange(fn) -> fn(sight) when another tab changes the balance
 //   Wallet.unit(n)      -> 'sight' (the word to print next to a number)
 //   Wallet.see(n)       -> applies the loss of vision for a balance of n to the page
+//   Wallet.PACKS        -> the sight packs every shop sells (all prices are pretend)
 //
 // Pages style the loss with two CSS variables Wallet.see() sets on <html>:
 //   --loss  0 (perfect sight, START or more) .. 1 (nothing left)
@@ -36,8 +37,16 @@
     write(n); return n;
   }
 
+  // one catalogue, so the shop on home.html and the shops inside games sell the same thing
+  const PACKS=[
+    {name:'Pouch of sight', coins:500, price:0.99, note:'A little treat.'},
+    {name:'Bucket of sight', coins:2000, price:4.99, badge:'Most popular', note:'Chosen by people who also chose this.'},
+    {name:'Pond of sight', coins:12000, price:49.99, badge:'Best value', note:'Only 4.1¢ per point of sight, which sounds small.'},
+    {name:'Ocean of sight', coins:100000, price:999.99, badge:'For whales', note:'First purchase bonus: double sight! (This pack only.)', hot:true},
+  ];
+
   const Wallet = {
-    START,
+    START, PACKS,
     get(){ const n=read(); return n===null ? seed() : n; },
     set(n){ if(typeof n==='number' && isFinite(n)){ write(Math.max(0, n)); this.see(); } },
     add(n){ this.set(this.get()+n); return this.get(); },

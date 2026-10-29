@@ -354,12 +354,7 @@ let quests=[], questDay='', tierPoints=0, sinceAd=0;
 let consent=false, agreed=false, sound=true, oddsFmt='frac', abGroup='B';
 let referrals=0, declines=7, audio=null, pushTimer=null;
 const money = n => '$'+n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-const PACKS=[
-  {name:'Pouch of sight', coins:500, price:0.99, note:'A little treat.'},
-  {name:'Bucket of sight', coins:2000, price:4.99, badge:'Most popular', note:'Chosen by people who also chose this.'},
-  {name:'Pond of sight', coins:12000, price:49.99, badge:'Best value', note:'Only 4.1¢ per point of sight, which sounds small.'},
-  {name:'Ocean of sight', coins:100000, price:999.99, badge:'For whales', note:'First purchase bonus: double sight! (This pack only.)', hot:true},
-];
+const PACKS=Wallet.PACKS;  // the same packs the shop on home.html sells
 const AMOUNTS=[10,25,50,'All in'];
 
 // ---- save file (the sunk cost is the product) ----
