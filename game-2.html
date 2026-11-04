@@ -153,7 +153,7 @@
 <footer class="status" id="status">
   <span class="stat">Bombs <b id="found">0/6</b></span>
   <span class="stat clock" id="clockWrap"><b id="clock">0:50</b></span>
-  <button id="squintBtn" title="Halves the house noise for 5 seconds. Costs 15 sight.">Squint · 15</button>
+  <button id="squintBtn" title="Halves the house noise for 5 seconds. Costs 5% of your sight.">Squint</button>
   <span class="zoom" role="group" aria-label="Zoom">
     <button id="zoomOut" aria-label="Zoom out">−</button>
     <button class="pct" id="zoomPct" aria-label="Zoom to fit">100%</button>
@@ -191,22 +191,35 @@ const canvas = $('board'), ctx = canvas.getContext('2d');
 // ---- the house ----
 const BOMBS=6, MULT=25, FEE=.1;          // the bet sheet shows MULT; FEE comes off afterwards
 const HOUSE_SECOND=1.15;                 // the clock ticks 15% fast. see the fine print
-const MISS_PENALTY=3, SQUINT_COST=15, SQUINT_MS=5000;
-const AMOUNTS=[10,25,50,'All in'];
-const clockFor = v => Math.round(30 + 20*v/100);                 // tired eyes get less time
-// how far a bomb's shade sits from where it should be. bigger stakes, subtler bombs
-const stakeFactor = st => Math.max(.35, Math.min(1, 1 - Math.log10(Math.max(st,10)/10)*.45));
-const subtlety = st => stakeFactor(st);
-// the house's noise, the same curve as the skyline in vision.js: 0 at 100 sight, 150 at none.
-// every cell gets fresh random error in every channel, several times a second
+const MISS_PENALTY=3, SQUINT_MS=5000;
+// stakes are shares of the sight you have, so a bet means the same at 50 sight as at 50,000
+const SHARES=[['5%',.05],['10%',.1],['25%',.25],['All in',1]];
+const stakeOf = share => share>=1 ? coins : Math.max(1, Math.round(coins*share));
+const squintCost = () => Math.max(1, Math.round((coins+held)*.05));
+
+// Sight is felt in doublings, not points. q = log2(sight / START): 0 is where you started,
+// +1 is twice that, -1 is half. Losing 10 of 100 is a nudge; winning 25x is a new pair of eyes.
+const doublings = v => Math.log2(Math.max(1, v)/Wallet.START);
+const FLOOR = () => Math.log2(Wallet.START);              // halvings from START down to 1 sight
+const depth = v => Math.max(0, Math.min(1, -doublings(v)/FLOOR())); // 0 at START or more, 1 at 1 sight
+// below START: the house's noise comes in slowly (the skyline's static, on a gentler curve)
 const MAX_SIGMA=150, NOISE_MS=140;
-const sigmaFor = v => MAX_SIGMA*Math.max(0, Math.min(100, 100-v))/100;
-// a bomb is its cell, darker. this much lightness comes off: plain to see with clear eyes,
-// gone under the noise once your sight is spent
-const darken = f => .06 + .08*f;
-const shadeText = f => (darken(f)*100).toFixed(1)+'%';
+const sigmaFor = v => MAX_SIGMA*Math.pow(depth(v), 1.5);
+// above START: every doubling buys another step of resolution. bombs keep their size, so they
+// become blocks of finer cells; tap any cell of the block. RMAX caps the sheet near 125k cells
+const RMAX=6;
+const resFor = v => Math.max(1, Math.min(RMAX, 1+Math.floor(doublings(v))));
+// and the local colour differential: how far each cell strays from its neighbourhood's average.
+// clear eyes calm it (bombs stand out), tired ones exaggerate it (bombs hide in the clutter)
+const contrastFor = v => doublings(v)>=0 ? 1-Math.min(.45, .15*doublings(v)) : 1+.6*depth(v);
+const clockFor = v => Math.round(doublings(v)>=0 ? 50+5*Math.min(4, doublings(v)) : 50-20*depth(v));
+// bigger shares of your sight hide the bombs better
+const stakeFactor = share => Math.max(.35, Math.min(1, 1 - Math.log10(share/.05)*.45));
+// a bomb is its cells, darker: this share of each channel comes off. Finer sheets get fainter bombs,
+// since a bigger, calmer patch is easier to see. Still the easiest sheet to read; just not free
+const darken = (f, res=1) => (.06 + .08*f) / Math.sqrt(res);
+const shadeText = (f, res) => (darken(f, res)*100).toFixed(1)+'%';
 const INSIDE=[189,215,238];               // the inside of the set: Excel's pale blue, never black
-const ZMAX=8;                             // zoom, relative to the whole sheet fitting the screen
 
 // ---- fractals, each with a few windows worth looking through ----
 const FRACTALS = {
@@ -238,32 +251,19 @@ function scale(t){
   const s=t<.5?0:1, u=t<.5?t*2:(t-.5)*2, a=SCALE[s], b=SCALE[s+1];
   return [0,1,2].map(i=>Math.round(a[i]+(b[i]-a[i])*u));
 }
-function rgb2hsl([r,g,b]){
-  r/=255; g/=255; b/=255;
-  const mx=Math.max(r,g,b), mn=Math.min(r,g,b), l=(mx+mn)/2;
-  if(mx===mn) return [0,0,l];
-  const d=mx-mn, s=l>.5 ? d/(2-mx-mn) : d/(mx+mn);
-  const h = mx===r ? (g-b)/d+(g<b?6:0) : mx===g ? (b-r)/d+2 : (r-g)/d+4;
-  return [h*60,s,l];
-}
-function hsl2rgb([h,s,l]){
-  h=((h%360)+360)%360/360;
-  if(!s){ const v=Math.round(l*255); return [v,v,v]; }
-  const q=l<.5 ? l*(1+s) : l+s-l*s, p=2*l-q;
-  const hue=t=>{ t=(t+1)%1; return t<1/6 ? p+(q-p)*6*t : t<1/2 ? q : t<2/3 ? p+(q-p)*(2/3-t)*6 : p; };
-  return [hue(h+1/3),hue(h),hue(h-1/3)].map(v=>Math.round(v*255));
-}
-const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+// darker means darker: every channel scaled down, so bright colours don't turn vivid instead
+const sink = (c, d) => c.map(v=>Math.round(v*(1-d)));
 
 // ---- state ----
 let coins=Wallet.get();  // the arcade wallet holds sight; every game bets it
-const sight = () => (1-Wallet.loss(coins))*100;  // how well you see, 0..100
-let fractal='mandelbrot', stake=10, state='betting'; // betting | playing | result
-let grid=null;          // {cols, rows, kind, cells:[{c:[r,g,b], inside, busy}]}
+const sight = () => coins/Wallet.START*100;   // as a % of where you started; can go well past 100
+let fractal='mandelbrot', share=.05, stake=1, state='betting'; // betting | playing | result
+// grid: {cols, rows, res, kind, inside:Uint8Array, base:Uint8ClampedArray (rgb), busy:Float32Array}
+let grid=null;
 let bombs=[], sel={c:0,r:0}, timeLeft=0, lastTick=0, squintUntil=0, squinted=false, revealing=false;
 // the stake is held, not gone, until the round is settled: you play at the sight you sat down with
-let held=0, noise=null;
-const playSight = () => (1-Wallet.loss(coins+held))*100;
+let held=0, noise=null, shown=null;
+const playSight = () => coins+held;
 function sigmaNow(){
   if(revealing) return 0;
   return sigmaFor(playSight()) * (Date.now()<squintUntil ? .5 : 1);
@@ -279,17 +279,18 @@ function roll(){
     noise[i]=m*Math.cos(a); noise[i+1]=m*Math.sin(a);
   }
 }
-let rounds=0, wins=0, warned=false;
+let rounds=0, wins=0, warned=false, best=0;
 const SAVE='arcade.bombsheet.v1';
 function save(){
-  try { localStorage.setItem(SAVE, JSON.stringify({fractal, stake, rounds, wins, warned})); } catch(e){}
+  try { localStorage.setItem(SAVE, JSON.stringify({fractal, share, rounds, wins, warned, best})); } catch(e){}
 }
 function load(){
   let d; try { d=JSON.parse(localStorage.getItem(SAVE)||'null'); } catch(e){}
   if(!d) return;
   const num=(v,f)=>typeof v==='number' && isFinite(v) ? v : f;
   if(FRACTALS[d.fractal]) fractal=d.fractal;
-  stake=num(d.stake,stake); rounds=num(d.rounds,0); wins=num(d.wins,0); warned=!!d.warned;
+  if(SHARES.some(([,v])=>v===d.share)) share=d.share;
+  rounds=num(d.rounds,0); wins=num(d.wins,0); warned=!!d.warned; best=num(d.best,0);
 }
 
 // ---- the board ----
@@ -306,6 +307,7 @@ function measure(){
 function cellSize(){ return grid ? Math.min((W-RH())/grid.cols, (H-CH())/grid.rows) : 12; }
 // the view: z is zoom (1 = the whole sheet fits), x and y pan the cells under the headers
 let view={z:1, x:0, y:0};
+const zmax = () => 8*(grid ? grid.res : 1);   // finer sheets let you zoom further
 function geom(){ const cs=cellSize()*view.z; return {cs, x0:RH()+view.x, y0:CH()+view.y}; }
 function clampView(){
   if(!grid) return;
@@ -315,7 +317,7 @@ function clampView(){
 }
 // zoom by factor k, keeping the point (px, py) on the canvas still
 function zoomAt(px, py, k){
-  const z=Math.max(1, Math.min(ZMAX, view.z*k)); k=z/view.z;
+  const z=Math.max(1, Math.min(zmax(), view.z*k)); k=z/view.z;
   view.x = px-RH() - (px-RH()-view.x)*k;
   view.y = py-CH() - (py-CH()-view.y)*k;
   view.z=z; clampView(); draw(); zoomLabel();
@@ -334,122 +336,176 @@ function showCell(c, r){
   clampView();
 }
 
+function sample(kind, cols, rows, win){
+  const [ox,oy,w]=win, h=w*rows/cols, mu=new Float64Array(cols*rows);
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++)
+    mu[r*cols+c]=escape(kind, ox-w/2+(c+.5)*w/cols, oy-h/2+(r+.5)*h/rows);
+  return mu;
+}
 function newBoard(){
-  const target = coarse ? 13 : 11;
-  const cols=Math.max(18, Math.min(80, Math.floor((W-RH())/target)));
-  const cs=(W-RH())/cols, rows=Math.max(12, Math.floor((H-CH())/cs));
+  const target = coarse ? 13 : 11, res=resFor(playSight());
+  const bc=Math.max(18, Math.min(80, Math.floor((W-RH())/target)));
+  const br=Math.max(12, Math.floor((H-CH())/((W-RH())/bc)));
   const f=FRACTALS[fractal];
-  // try a few windows and keep the one with the most edge in it to hide things in
-  let best=null;
+  // pick the window at the coarse size, where it is cheap: the one with the most edge to hide things in
+  let pick=null;
   for(let tries=0; tries<6; tries++){
-    const [cx,cy,w0]=pickOne(f.views), w=w0*rand(.85,1.15), h=w*rows/cols;
-    const ox=cx+rand(-.05,.05)*w, oy=cy+rand(-.05,.05)*h;
-    const mu=[];
-    for(let r=0;r<rows;r++) for(let c=0;c<cols;c++)
-      mu.push(escape(fractal, ox-w/2+(c+.5)*w/cols, oy-h/2+(r+.5)*h/rows));
-    const cells=shade(mu), inside=cells.filter(x=>x.inside).length;
-    busyness(cells, cols, rows);
-    const score=cells.filter(x=>x.busy>40).length * (inside>4 && inside<mu.length*.55 ? 1 : .2);
-    if(!best || score>best.score) best={cells, score};
+    const [cx,cy,w0]=pickOne(f.views), w=w0*rand(.85,1.15), h=w*br/bc;
+    const win=[cx+rand(-.05,.05)*w, cy+rand(-.05,.05)*h, w];
+    const mu=sample(fractal, bc, br, win), g=build(mu, bc, br, 1, 1);
+    let edgy=0; for(let i=0;i<g.busy.length;i++) if(g.busy[i]>40) edgy++;
+    const inside=g.inside.reduce((a,b)=>a+b,0);
+    const score=edgy*(inside>4 && inside<mu.length*.55 ? 1 : .2);
+    if(!pick || score>pick.score) pick={win, score, g};
   }
-  grid={cols, rows, kind:fractal, cells:best.cells};
+  // then draw it at the resolution your sight has paid for
+  const cols=bc*res, rows=br*res;
+  grid = res===1 && contrastFor(playSight())===1 ? pick.g : build(sample(fractal, cols, rows, pick.win), cols, rows, res, contrastFor(playSight()));
+  grid.kind=fractal;
   view={z:1, x:0, y:0}; zoomLabel(); roll();
-  bombs=[];
+  bombs=[]; shown=null;
   sel={c:Math.floor(cols/2), r:Math.floor(rows/2)};
   idleFormula();
-  draw();
+  paint(); draw();
 }
 
-// Excel's percentile colour scale: every colour gets the same number of cells
-function shade(mu){
-  const out=mu.filter(m=>m>=0).sort((a,b)=>a-b), n=out.length;
-  const rank=m=>{ let lo=0, hi=n; while(lo<hi){ const mid=(lo+hi)>>1; if(out[mid]<m) lo=mid+1; else hi=mid; } return n>1 ? lo/(n-1) : 0; };
-  return mu.map(m=>m<0 ? {c:INSIDE, inside:true} : {c:scale(rank(m)), inside:false});
-}
-// how much each cell differs from its neighbours. the house hides bombs where this is high
-function busyness(cells, cols, rows){
-  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
-    const me=cells[r*cols+c]; let busy=0;
-    for(const [dc,dr] of [[1,0],[-1,0],[0,1],[0,-1]]){
-      if(c+dc<0||c+dc>=cols||r+dr<0||r+dr>=rows) continue;
-      const n=cells[(r+dr)*cols+(c+dc)];
-      busy+=Math.abs(n.c[0]-me.c[0])+Math.abs(n.c[1]-me.c[1])+Math.abs(n.c[2]-me.c[2]);
+// colours: Excel's percentile scale, every colour gets the same number of cells. Then the local
+// differential: each coloured cell pulled toward (k<1) or pushed away from (k>1) the average of
+// the coloured cells within one bomb's width of it
+function build(mu, cols, rows, res, k){
+  const n=cols*rows, out=[], inside=new Uint8Array(n), base=new Uint8ClampedArray(n*3);
+  for(let i=0;i<n;i++) if(mu[i]>=0) out.push(mu[i]); else inside[i]=1;
+  out.sort((a,b)=>a-b);
+  const m=out.length, rank=v=>{ let lo=0, hi=m; while(lo<hi){ const mid=(lo+hi)>>1; if(out[mid]<v) lo=mid+1; else hi=mid; } return m>1 ? lo/(m-1) : 0; };
+  for(let i=0;i<n;i++){ const c=inside[i] ? INSIDE : scale(rank(mu[i])); base[i*3]=c[0]; base[i*3+1]=c[1]; base[i*3+2]=c[2]; }
+  if(k!==1){
+    // summed-area tables over the coloured cells, so each neighbourhood mean is four lookups
+    const W1=cols+1, S=[0,1,2].map(()=>new Float64Array(W1*(rows+1))), N=new Float64Array(W1*(rows+1));
+    for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+      const i=r*cols+c, o=(r+1)*W1+c+1, on=inside[i]?0:1;
+      N[o]=on+N[o-1]+N[o-W1]-N[o-W1-1];
+      for(let ch=0;ch<3;ch++) S[ch][o]=(on?base[i*3+ch]:0)+S[ch][o-1]+S[ch][o-W1]-S[ch][o-W1-1];
     }
-    me.busy=busy;
+    const rad=Math.max(1,res), copy=Uint8ClampedArray.from(base);
+    for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+      const i=r*cols+c; if(inside[i]) continue;
+      const r0=Math.max(0,r-rad), r1=Math.min(rows,r+rad+1), c0=Math.max(0,c-rad), c1=Math.min(cols,c+rad+1);
+      const box=a=>a[r1*W1+c1]-a[r0*W1+c1]-a[r1*W1+c0]+a[r0*W1+c0], cnt=box(N);
+      for(let ch=0;ch<3;ch++){ const mean=box(S[ch])/cnt; copy[i*3+ch]=mean+(base[i*3+ch]-mean)*k; }
+    }
+    base.set(copy);
   }
+  // busyness at bomb scale: how much a cell differs from the cells one bomb-width away
+  const busy=new Float32Array(n), st=res;
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+    const i=r*cols+c; let b=0;
+    for(const [dc,dr] of [[st,0],[-st,0],[0,st],[0,-st]]){
+      const cc=c+dc, rr=r+dr; if(cc<0||cc>=cols||rr<0||rr>=rows) continue;
+      const j=rr*cols+cc; b+=Math.abs(base[j*3]-base[i*3])+Math.abs(base[j*3+1]-base[i*3+1])+Math.abs(base[j*3+2]-base[i*3+2]);
+    }
+    busy[i]=b;
+  }
+  return {cols, rows, res, inside, base, busy};
 }
 
 function plant(){
-  const {cols, rows, cells}=grid, f=subtlety(stake);
-  const far = (c,r) => bombs.every(b=>Math.max(Math.abs(b.c-c),Math.abs(b.r-r))>=4);
-  const edge = (c,r) => c<1||r<1||c>=cols-1||r>=rows-1;
+  const {cols, rows, res:B, inside, busy}=grid, f=stakeFactor(share);
+  const far = (c,r) => bombs.every(b=>Math.max(Math.abs(b.c-c),Math.abs(b.r-r))>=4*B);
+  const fits = (c,r) => c>=1 && r>=1 && c+B<cols && r+B<rows;
+  const same = (c,r,v,pad=0) => { for(let y=r-pad;y<r+B+pad;y++) for(let x=c-pad;x<c+B+pad;x++) if(inside[y*cols+x]!==v) return false; return true; };
   const coloured=[], calm=[];
-  cells.forEach((cell,i)=>{ const c=i%cols, r=Math.floor(i/cols); if(edge(c,r)) return;
-    (cell.inside ? calm : coloured).push({c, r, busy:cell.busy}); });
-  coloured.sort((a,b)=>b.busy-a.busy);
-  const pool=coloured.slice(0, Math.max(BOMBS*4, Math.floor(coloured.length*.25)));
-  bombs=[];
-  const sink = (cell, d) => { const [h,s,l]=rgb2hsl(cell); return hsl2rgb([h, s, Math.max(0, l-d)]); };
-  // one always goes in the calm blue middle, at half strength, where a shade is a matter of opinion
-  const deep=calm.filter(p=>[[1,0],[-1,0],[0,1],[0,-1]].every(([dc,dr])=>cells[(p.r+dr)*cols+p.c+dc].inside));
-  if(deep.length){ const p=pickOne(deep), d=darken(f)*.5;
-    bombs.push({c:p.c, r:p.r, found:false, was:INSIDE, is:sink(INSIDE, d), drop:d, calm:true}); }
-  let guard=0;
-  while(bombs.length<BOMBS && guard++<2000){
-    const p=pickOne(guard<1500 ? pool : coloured); if(!p || !far(p.c,p.r)) continue;
-    const cell=cells[p.r*cols+p.c], d=darken(f)*rand(.85,1);
-    bombs.push({c:p.c, r:p.r, found:false, was:cell.c, is:sink(cell.c, d), drop:d});
+  for(let r=1;r+B<rows;r+=B) for(let c=1;c+B<cols;c+=B){
+    if(same(c,r,0)) coloured.push({c, r, busy:busy[r*cols+c]});
+    else if(fits(c-1,r-1) && same(c,r,1,1)) calm.push({c, r});
   }
+  coloured.sort((a,b)=>b.busy-a.busy);
+  const pool=coloured.slice(0, Math.max(BOMBS*4, Math.floor(coloured.length*.12)));
+  bombs=[];
+  // one always goes in the calm blue middle, at half strength, where a shade is a matter of opinion
+  if(calm.length){ const p=pickOne(calm); bombs.push({c:p.c, r:p.r, size:B, found:false, drop:darken(f,B)*.5, calm:true}); }
+  let guard=0;
+  while(bombs.length<BOMBS && guard++<3000){
+    const p=pickOne(guard<2000 ? pool : coloured); if(!p || !far(p.c,p.r)) continue;
+    bombs.push({c:p.c, r:p.r, size:B, found:false, drop:darken(f,B)*rand(.85,1)});
+  }
+  shown=null; paint();
 }
-const bombAt = (c,r) => bombs.find(b=>b.c===c && b.r===r);
+const bombAt = (c,r) => bombs.find(b=>c>=b.c && c<b.c+b.size && r>=b.r && r<b.r+b.size);
+
+// the cells live in an offscreen image, one pixel per cell, drawn scaled up with no smoothing
+const off=document.createElement('canvas'), octx=off.getContext('2d');
+let img=null;
+function paint(){
+  if(!grid) return;
+  const {cols, rows, base}=grid, n=cols*rows;
+  if(off.width!==cols || off.height!==rows || !img){ off.width=cols; off.height=rows; img=octx.createImageData(cols, rows); }
+  if(!shown){
+    // the sheet as the house drew it: the fractal, with the bombs sunk into it
+    shown=Uint8ClampedArray.from(base);
+    for(const b of bombs) for(let r=b.r;r<b.r+b.size;r++) for(let c=b.c;c<b.c+b.size;c++){
+      const i=(r*cols+c)*3, d=sink([shown[i],shown[i+1],shown[i+2]], b.drop); shown[i]=d[0]; shown[i+1]=d[1]; shown[i+2]=d[2];
+    }
+  }
+  const sg=sigmaNow(), px=img.data;
+  for(let i=0;i<n;i++){
+    let r=shown[i*3], g=shown[i*3+1], b=shown[i*3+2];
+    if(sg && noise){ const j=i*4, e=noise[j]*sg, h=sg*.35; r+=e+noise[j+1]*h; g+=e+noise[j+2]*h; b+=e+noise[j+3]*h; }
+    px[i*4]=r; px[i*4+1]=g; px[i*4+2]=b; px[i*4+3]=255;
+  }
+  octx.putImageData(img, 0, 0);
+}
+
+// a resolution change sweeps across the sheet, the new one replacing the old
+let wipe=null;  // {snap, t0, up}
+const WIPE_MS=900;
+function snapshot(){
+  if(reduceMotion) return null;
+  const s=document.createElement('canvas'); s.width=canvas.width; s.height=canvas.height;
+  s.getContext('2d').drawImage(canvas, 0, 0); return s;
+}
 
 function draw(){
   ctx.clearRect(0,0,W,H);
   if(!grid) return;
-  const {cols, rows, cells}=grid, {cs, x0, y0}=geom(), hx=RH(), hy=CH();
-  // the visible window of cells
+  const {cols, rows}=grid, {cs, x0, y0}=geom(), hx=RH(), hy=CH();
   const c0=Math.max(0, Math.floor((hx-x0)/cs)), c1=Math.min(cols, Math.ceil((W-x0)/cs));
   const r0=Math.max(0, Math.floor((hy-y0)/cs)), r1=Math.min(rows, Math.ceil((H-y0)/cs));
   ctx.save(); ctx.beginPath(); ctx.rect(hx, hy, W-hx, H-hy); ctx.clip();
   ctx.fillStyle=css('--cell'); ctx.fillRect(hx,hy,W-hx,H-hy);
-  const sg=sigmaNow(), k=v=>Math.max(0, Math.min(255, Math.round(v)));
-  for(let r=r0;r<r1;r++) for(let c=c0;c<c1;c++){
-    const b=bombAt(c,r), base=b ? b.is : cells[r*cols+c].c;
-    if(sg && noise){
-      const j=(r*cols+c)*4, e=noise[j]*sg, h=sg*.35;
-      ctx.fillStyle=`rgb(${k(base[0]+e+noise[j+1]*h)},${k(base[1]+e+noise[j+2]*h)},${k(base[2]+e+noise[j+3]*h)})`;
-    } else ctx.fillStyle=rgb(base);
-    ctx.fillRect(x0+c*cs, y0+r*cs, Math.ceil(cs), Math.ceil(cs));
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(off, x0, y0, cols*cs, rows*cs);
+  // gridlines, fading out as cells get too small to need them
+  if(cs>=4){
+    ctx.globalAlpha=Math.min(1, (cs-4)/6); ctx.strokeStyle=css('--grid-line'); ctx.lineWidth=1; ctx.beginPath();
+    for(let c=c0;c<=c1;c++){ const x=Math.round(x0+c*cs)+.5; ctx.moveTo(x,y0+r0*cs); ctx.lineTo(x,y0+r1*cs); }
+    for(let r=r0;r<=r1;r++){ const y=Math.round(y0+r*cs)+.5; ctx.moveTo(x0+c0*cs,y); ctx.lineTo(x0+c1*cs,y); }
+    ctx.stroke(); ctx.globalAlpha=1;
   }
-  // gridlines
-  ctx.strokeStyle=css('--grid-line'); ctx.lineWidth=1; ctx.beginPath();
-  for(let c=c0;c<=c1;c++){ const x=Math.round(x0+c*cs)+.5; ctx.moveTo(x,y0+r0*cs); ctx.lineTo(x,y0+r1*cs); }
-  for(let r=r0;r<=r1;r++){ const y=Math.round(y0+r*cs)+.5; ctx.moveTo(x0+c0*cs,y); ctx.lineTo(x0+c1*cs,y); }
-  ctx.stroke();
   // bombs: found ones get drawn, the rest only when the round is over
   for(const b of bombs){
-    const cx=x0+(b.c+.5)*cs, cy=y0+(b.r+.5)*cs;
+    const bs=b.size*cs, cx=x0+b.c*cs+bs/2, cy=y0+b.r*cs+bs/2, rr=Math.max(bs*.62, 5);
     if(b.found){
       ctx.fillStyle='#1b1b1b'; ctx.strokeStyle='#fff'; ctx.lineWidth=1.5;
-      ctx.beginPath(); ctx.arc(cx, cy+cs*.08, cs*.62, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy+rr*.13, rr, 0, Math.PI*2); ctx.fill(); ctx.stroke();
       ctx.strokeStyle='#f2c230'; ctx.lineWidth=2; ctx.beginPath();
-      ctx.moveTo(cx+cs*.35, cy-cs*.35); ctx.lineTo(cx+cs*.7, cy-cs*.75); ctx.stroke();
+      ctx.moveTo(cx+rr*.56, cy-rr*.56); ctx.lineTo(cx+rr*1.13, cy-rr*1.2); ctx.stroke();
     } else if(revealing){
       ctx.strokeStyle='#e0261b'; ctx.lineWidth=2.5;
-      ctx.beginPath(); ctx.arc(cx, cy, Math.max(cs*1.6, 14), 0, Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, Math.max(bs*1.6, 14), 0, Math.PI*2); ctx.stroke();
     }
   }
   // the selected cell, Excel green
   if(state==='playing' || revealing){
+    const s=Math.max(cs, 6), o=(s-cs)/2;
     ctx.strokeStyle=css('--select'); ctx.lineWidth=2;
-    ctx.strokeRect(x0+sel.c*cs-1, y0+sel.r*cs-1, cs+2, cs+2);
+    ctx.strokeRect(x0+sel.c*cs-o-1, y0+sel.r*cs-o-1, s+2, s+2);
   }
   ctx.restore();
   // headers stay put while the cells move under them, like frozen panes
   const head=css('--grid-head'), text=css('--grid-text'), edgeC=css('--grid-edge');
   ctx.fillStyle=head; ctx.fillRect(0,0,W,hy); ctx.fillRect(0,0,hx,H);
   ctx.fillStyle=text; ctx.font='10px ui-sans-serif, system-ui, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-  const everyC=Math.ceil(18/cs), everyR=Math.ceil(13/cs);
+  const everyC=Math.ceil(22/cs), everyR=Math.ceil(13/cs);
   ctx.save(); ctx.beginPath(); ctx.rect(hx, 0, W-hx, hy); ctx.clip();
   for(let c=Math.floor(c0/everyC)*everyC; c<c1; c+=everyC) ctx.fillText(colName(c), x0+(c+.5)*cs, hy/2);
   ctx.restore(); ctx.save(); ctx.beginPath(); ctx.rect(0, hy, hx, H-hy); ctx.clip();
@@ -457,19 +513,30 @@ function draw(){
   ctx.restore();
   ctx.strokeStyle=edgeC; ctx.lineWidth=1; ctx.beginPath();
   ctx.moveTo(0,hy+.5); ctx.lineTo(W,hy+.5); ctx.moveTo(hx+.5,0); ctx.lineTo(hx+.5,H); ctx.stroke();
+  // the sweep: what's left of the old sheet below a bright line
+  if(wipe){
+    const t=Math.min(1, (performance.now()-wipe.t0)/WIPE_MS), e=1-Math.pow(1-t, 3), y=hy+(H-hy)*e;
+    ctx.save(); ctx.beginPath(); ctx.rect(0, y, W, H-y); ctx.clip();
+    ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(wipe.snap, 0, 0); ctx.restore();
+    ctx.fillStyle=wipe.up ? 'rgba(255,255,255,.95)' : 'rgba(224,38,27,.85)';
+    ctx.shadowColor=ctx.fillStyle; ctx.shadowBlur=14; ctx.fillRect(hx, y-1.5, W-hx, 3); ctx.shadowBlur=0;
+    if(t>=1) wipe=null;
+  }
 }
 
 // ---- vision ----
 function applyVision(){
-  // the meter shows what you see right now; the number above it is what you have left
-  $('visionBar').style.width=playSight()+'%';
-  $('visionPct').textContent=Math.round(playSight())+'%';
-  draw();
+  // the meter fills in doublings: START is a bit past half, each doubling above it is another step
+  const v=playSight(), q=doublings(v), fl=FLOOR();
+  $('visionBar').style.width=Math.max(0, Math.min(100, (q+fl)/(fl+Math.log2(RMAX)+1)*100))+'%';
+  $('visionPct').textContent=fmt(Math.round(v/Wallet.START*100))+'%';
+  paint(); draw();
 }
 // static, like the skyline: the noise re-rolls while there is any. reduced motion gets one still frame
 let lastRoll=0;
 function animate(t){
-  if(!reduceMotion && sigmaNow()>0 && t-lastRoll>NOISE_MS){ lastRoll=t; roll(); draw(); }
+  if(!reduceMotion && sigmaNow()>0 && t-lastRoll>NOISE_MS){ lastRoll=t; roll(); paint(); draw(); }
+  else if(wipe) draw();
   requestAnimationFrame(animate);
 }
 
@@ -503,10 +570,11 @@ function renderSheet(){
   toggleRow($('fractalRow'), Object.entries(FRACTALS).map(([k,f])=>[f.name,k]), fractal, v=>{
     if(v===fractal) return; fractal=v; save(); newBoard();
     toast('Changing the fractal is free. The odds are the same in all of them.'); });
-  if(stake>coins) stake=Math.min(10, coins);
-  toggleRow($('amounts'), AMOUNTS.map(a=>{ const v=a==='All in'?coins:a; return [a, v, v>coins||v<=0]; }), stake, v=>{ stake=v; save(); });
-  const f=subtlety(stake);
-  $('terms').textContent = `${BOMBS} bombs · ${clockFor(playSight())} seconds · bombs ${shadeText(f)} darker · house noise ±${Math.round(sigmaFor(playSight()))}`;
+  toggleRow($('amounts'), SHARES.map(([label,v])=>[`${label} · ${fmt(stakeOf(v))}`, v, coins<=0]), share, v=>{ share=v; save(); });
+  stake=stakeOf(share);
+  const v=playSight(), sg=Math.round(sigmaFor(v));
+  $('terms').textContent = `${BOMBS} bombs · ${clockFor(v)} seconds · bombs ${shadeText(stakeFactor(share), resFor(v))} darker · `
+    + (sg ? `house noise ±${sg}` : `resolution ×${resFor(v)}${resFor(v)<RMAX ? ` (×${resFor(v)+1} at ${fmt(Wallet.START*Math.pow(2, resFor(v)))})` : ''}`);
   const go=$('go');
   if(coins<=0){ go.disabled=false; go.textContent='Out of sight. Back to the arcade'; go.onclick=()=>location.href='home.html'; return; }
   go.onclick=start;
@@ -515,15 +583,18 @@ function renderSheet(){
 }
 
 function start(){
+  stake=stakeOf(share);
   if(state!=='betting' || stake<=0 || !Wallet.spend(stake)) return;
   coins=Wallet.get(); held=stake; rounds++; save();
   plant();
   timeLeft=clockFor(playSight()); squinted=false; squintUntil=0;
   state='playing';
   $('sheet').classList.add('hidden');
-  $('squintBtn').disabled = coins<SQUINT_COST;
+  $('squintBtn').textContent=`Squint · ${fmt(squintCost())}`;
+  $('squintBtn').disabled = coins<squintCost();
   updateHud(); updateStatus(); draw();
-  say(`Find ${BOMBS} cells a shade darker than their neighbours. Scroll or pinch to zoom, drag to move`, 3200);
+  say(grid.res>1 ? `Find ${BOMBS} dark ${grid.res}×${grid.res} patches. Tap any cell of one. Scroll or pinch to zoom, drag to move`
+    : `Find ${BOMBS} cells a shade darker than their neighbours. Scroll or pinch to zoom, drag to move`, 3200);
   canvas.focus({preventScroll:true});
   lastTick=performance.now(); requestAnimationFrame(tick);
 }
@@ -561,7 +632,7 @@ function check(c, r){
     return;
   }
   timeLeft-=MISS_PENALTY;
-  const near=bombs.some(x=>!x.found && Math.max(Math.abs(x.c-c),Math.abs(x.r-r))<=1);
+  const near=bombs.some(x=>!x.found && c>=x.c-x.size && c<x.c+2*x.size && r>=x.r-x.size && r<x.r+2*x.size);
   setFormula(name, f, 'FALSE');
   say(near ? `So close. That was right next to one. −${MISS_PENALTY}s` : `Not a bomb. −${MISS_PENALTY}s`, 1500);
   draw(); updateStatus();
@@ -572,13 +643,24 @@ function showResult(html, ms, then){
   const r=$('result'); r.innerHTML=html; r.classList.add('show'); say('');
   setTimeout(()=>{ r.classList.remove('show'); then(); }, ms);
 }
+// what a change of sight does to the next sheet, in words
+function eyes(before, after){
+  const r0=resFor(before), r1=resFor(after), s0=Math.round(sigmaFor(before)), s1=Math.round(sigmaFor(after));
+  const lines=[];
+  if(r1!==r0) lines.push(`Resolution ×${r0} → ×${r1}. ${r1>r0 ? `${r1*r1/(r0*r0)>=2 ? Math.round(r1*r1/(r0*r0))+'×' : 'More'} cells, same bombs` : 'Coarser cells, same bombs'}.`);
+  if(s1!==s0) lines.push(s1>s0 ? `House noise ±${s0} → ±${s1}.` : `House noise ±${s0} → ±${s1}.`);
+  if(clockFor(after)!==clockFor(before)) lines.push(`Clock ${clockFor(before)}s → ${clockFor(after)}s.`);
+  return lines.map(l=>`<small>${l}</small>`).join('');
+}
 function win(){
   state='result'; wins++;
-  const gross=stake*MULT, fee=Math.round(gross*FEE);
-  held=0; coins=Wallet.add(stake+gross-fee); save(); updateHud();
+  const before=playSight(), gross=stake*MULT, fee=Math.round(gross*FEE);
+  held=0; coins=Wallet.add(stake+gross-fee); best=Math.max(best, coins); save(); updateHud();
   setFormula('', `=SUM(winnings)-booth_fee`);
+  const x=coins/before;
   showResult(`Every bomb found<strong class="w">+${fmt(gross-fee)}</strong>
-    <small>Less a ${fmt(fee)} booth maintenance fee, charged on winnings only. Everything looks a little sharper.</small>`, 3400, endRound);
+    <small>You see ${x>=1.95 ? x.toFixed(x<10?1:0)+'× as much' : 'more'} now: ${fmt(coins)} sight.</small>${eyes(before, coins)}
+    <small>Less a ${fmt(fee)} booth maintenance fee, charged on winnings only.</small>`, 3800, ()=>endRound(before));
 }
 function lose(){
   state='result'; timeLeft=0; updateStatus();
@@ -589,19 +671,26 @@ function lose(){
   revealing=true; applyVision();
   const close = found===BOMBS-1 ? `<small>${found} of ${BOMBS}. One bomb away from ${fmt(stake*MULT)}!</small>` : `<small>${found} of ${BOMBS} found.</small>`;
   const note = quiet ? `<small>One was in the blue, ${(quiet.drop*100).toFixed(1)}% darker than the blue. Technically visible.</small>` : '';
-  showResult(`Time’s up<strong class="l">−${fmt(stake)}</strong>${close}${note}<small>For a moment, the noise lifts and you can see everything you bet.</small>`, 4200, ()=>{
+  const before=playSight();
+  showResult(`Time’s up<strong class="l">−${fmt(stake)}</strong>${close}${note}${eyes(before, coins)}
+    <small>Win this one back at 25× and you’d see ${fmt(Math.round(coins+stake*MULT*(1-FEE)))}.</small>`, 4600, ()=>{
     revealing=false; held=0; roll(); applyVision();
     if(!warned && sight()<60){ warned=true; save(); setTimeout(()=>toast('Your sight is now below the arcade average.'), 1200); }
-    endRound();
+    endRound(before);
   });
 }
-function endRound(){
+function endRound(before){
   state='betting'; squintUntil=0;
+  // a new resolution sweeps in over the old sheet: down for a loss, up for a win
+  const changed = before!==undefined && resFor(before)!==resFor(coins);
+  const snap = changed ? snapshot() : null;
   newBoard(); updateStatus();
+  if(snap){ wipe={snap, t0:performance.now(), up:resFor(coins)>resFor(before)}; say(wipe.up ? 'Enhance.' : 'Resolution down.', 1600); }
   renderSheet(); updateHud();
   $('sheet').classList.remove('hidden');
   if(coins<=0) setTimeout(broke, 500);
   else if(rounds%3===0 && sight()<90) setTimeout(()=>toast('Sight packs are back in stock.'), 800);
+  else if(best && coins<best/2 && rounds%2===0) setTimeout(()=>toast(`You were at ${fmt(best)} sight once. One win at All in gets most of it back.`), 900);
 }
 
 // ---- shop: the arcade's sight packs, the same ones home.html sells ----
@@ -620,17 +709,18 @@ function shop(){
     <p>You see ${Math.round(sight())}% of the sheet. ${sight()<60 ? 'That is below the arcade average.' : 'For now.'}</p>` +
     Wallet.PACKS.map((pk,i)=>`<div class="item"><div><b>${pk.name}, ${fmt(pk.coins)}</b><p>${pk.note}</p></div>
       <button data-i="${i}">${money(pk.price)}*</button></div>`).join('') +
-    `<div class="item"><div><b>Squint</b><p>Halves the house noise for 5 seconds. One per round, during a round.</p></div>
-      <button disabled>${SQUINT_COST} sight</button></div>
+    `<div class="item"><div><b>Squint</b><p>Halves the house noise for 5 seconds. One per round, during a round. Costs 5% of your sight.</p></div>
+      <button disabled>${fmt(squintCost())} sight</button></div>
     <p class="fine">*All prices are pretend. There’s no real money, card, or checkout anywhere in the arcade.</p>`,
     [{label:'Close', onClick:closeModal}]);
   $('card').querySelectorAll('.item button[data-i]').forEach(b=>b.onclick=()=>{
     const pk=Wallet.PACKS[+b.dataset.i];
-    coins=Wallet.add(pk.coins); updateHud(); toast(`+${fmt(pk.coins)} sight. Everything looks a little more winnable.`); shop(); });
+    const was=resFor(coins); coins=Wallet.add(pk.coins); if(resFor(coins)!==was) newBoard();
+    renderSheet(); updateHud(); toast(`+${fmt(pk.coins)} sight. Everything looks a little more winnable.`); shop(); });
 }
 $('shopBtn').onclick=()=>{ if(state==='playing') return toast('The shop is closed while the clock is running.'); shop(); };
 $('squintBtn').onclick=()=>{
-  if(state!=='playing' || squinted || !Wallet.spend(SQUINT_COST)) return;
+  if(state!=='playing' || squinted || !Wallet.spend(squintCost())) return;
   // squinting costs sight, so the noise it halves is a little worse than before
   coins=Wallet.get(); squinted=true; squintUntil=Date.now()+SQUINT_MS;
   $('squintBtn').disabled=true; updateHud(); say('Squinting', 1200);
@@ -642,8 +732,8 @@ function broke(){
 $('howBtn').onclick=()=>openModal(`<h3>How it works</h3>
   <p>${BOMBS} cells in the sheet are a shade darker than the fractal says they should be. Scroll or pinch to zoom, and drag to move around. Tap each one before the clock runs out.</p>
   <p>You bet sight. A wrong cell costs ${MISS_PENALTY} seconds. Find all ${BOMBS} and win ${MULT}× your stake, less a booth fee.</p>
-  <p>The less sight you have, the more of the house’s noise lands on every cell, and the shorter the clock. Clear eyes see the bombs. Spent ones see static.</p>
-  <p class="fine">Bigger stakes hide the bombs better. One bomb always hides in the calm blue middle, fainter than the rest. Seconds are house seconds, which are ${Math.round((HOUSE_SECOND-1)*100)}% shorter. Rounds played: ${rounds}. Rounds won: ${wins}.</p>`,
+  <p>Sight is felt in doublings. Every doubling above where you started buys a finer sheet: more cells, the same size bombs, calmer colours, and a longer clock. Below it, the house’s noise comes in, slowly at first, and the clock gets shorter.</p>
+  <p class="fine">Stakes are shares of your sight. Bigger shares hide the bombs better. One bomb always hides in the calm blue middle, fainter than the rest. Seconds are house seconds, which are ${Math.round((HOUSE_SECOND-1)*100)}% shorter. Rounds played: ${rounds}. Rounds won: ${wins}.</p>`,
   [{label:'Got it', primary:true, onClick:closeModal}]);
 $('footBtn').onclick=()=>openModal(`<h3>Play responsibly</h3>
   <p>Sight here is a number saved in your browser. Your actual eyes are fine.</p>
@@ -708,7 +798,8 @@ canvas.addEventListener('keydown', e=>{
   if(state!=='playing') return;
   const mv={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
   if(mv){ e.preventDefault();
-    sel={c:Math.max(0,Math.min(grid.cols-1, sel.c+mv[0])), r:Math.max(0,Math.min(grid.rows-1, sel.r+mv[1]))};
+    const st=e.shiftKey ? 1 : grid.res;  // a bomb's width at a time; Shift for single cells
+    sel={c:Math.max(0,Math.min(grid.cols-1, sel.c+mv[0]*st)), r:Math.max(0,Math.min(grid.rows-1, sel.r+mv[1]*st))};
     showCell(sel.c, sel.r);
     setFormula(ref(sel.c,sel.r), `=ISBOMB(${ref(sel.c,sel.r)})`); draw(); }
   else if(e.key==='Enter' || e.key===' '){ e.preventDefault(); check(sel.c, sel.r); }
@@ -716,8 +807,8 @@ canvas.addEventListener('keydown', e=>{
 addEventListener('keydown', e=>{ if(e.key==='Escape' && !$('modal').hidden) closeModal(); });
 new ResizeObserver(()=>{ measure(); if(!grid) newBoard(); else { clampView(); draw(); } }).observe($('wrap'));
 const matchDark=matchMedia('(prefers-color-scheme: dark)'); matchDark.addEventListener('change', draw);
-Wallet.onChange(n=>{ coins=n; updateHud(); if(state==='betting') renderSheet(); });
-addEventListener('pageshow', ()=>{ coins=Wallet.get(); updateHud(); if(state==='betting') renderSheet(); });
+Wallet.onChange(n=>{ const was=resFor(coins); coins=n; if(state==='betting'){ if(resFor(n)!==was) newBoard(); renderSheet(); } updateHud(); });
+addEventListener('pageshow', ()=>{ const was=resFor(coins); coins=Wallet.get(); if(state==='betting'){ if(resFor(coins)!==was) newBoard(); renderSheet(); } updateHud(); });
 
 // ---- boot ----
 load();
