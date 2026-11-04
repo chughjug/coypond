@@ -59,15 +59,6 @@
   .wrap { flex:1; position:relative; margin:0 12px; min-height:0; border:1px solid var(--grid-edge); background:var(--grid-head); overflow:hidden; }
   canvas { display:block; position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:cell; }
   canvas.grabbing { cursor:grabbing; }
-  /* --loss and --blur come from wallet.js. Squinting halves the blur; a lost round lifts it for a moment */
-  /* --zoom is how much of the blur zooming in magnifies along with the cells: most of it */
-  canvas { filter:blur(calc(var(--blur,0px) * var(--zoom,1))); }
-  canvas.squint { filter:blur(calc(var(--blur,0px) * var(--zoom,1) * .5)); }
-  canvas.clear { filter:none; }
-  canvas.easing { transition:filter .9s ease; }
-  .vignette { position:absolute; inset:0; pointer-events:none; opacity:var(--loss,0); transition:opacity .9s ease;
-    background:radial-gradient(ellipse at 50% 50%, transparent 35%, rgba(0,0,0,.75) 100%); }
-  .squint ~ .vignette { opacity:calc(var(--loss,0) * .5); } .clear ~ .vignette { opacity:0; }
   .caption { position:absolute; left:50%; top:10px; transform:translateX(-50%); margin:0; max-width:86%;
     padding:5px 12px; border-radius:14px; background:var(--sheet); color:var(--sheet-ink); font-style:italic; font-size:15px;
     box-shadow:0 2px 10px rgba(0,0,0,.18); pointer-events:none; text-align:center; }
@@ -136,7 +127,7 @@
     transition:opacity .25s, transform .25s; pointer-events:none; width:max-content; max-width:86vw; text-align:center; }
   .toast.show { opacity:1; transform:translate(-50%,0); }
   @media (prefers-reduced-motion: reduce) {
-    .sheet, .result, .toast, .meter i, .vignette { transition:none; } canvas.easing { transition:none; }
+    .sheet, .result, .toast, .meter i { transition:none; }
   }
 </style>
 </head>
@@ -157,13 +148,12 @@
 </div>
 <div class="wrap" id="wrap">
   <canvas id="board" tabindex="0" aria-label="Spreadsheet with a fractal drawn in it. Bombs are hidden in some cells."></canvas>
-  <div class="vignette" id="vignette"></div>
   <p class="caption" id="caption"></p>
 </div>
 <footer class="status" id="status">
   <span class="stat">Bombs <b id="found">0/6</b></span>
   <span class="stat clock" id="clockWrap"><b id="clock">0:50</b></span>
-  <button id="squintBtn" title="Halves the blur for 5 seconds. Costs 15 sight.">Squint · 15</button>
+  <button id="squintBtn" title="Halves the house noise for 5 seconds. Costs 15 sight.">Squint · 15</button>
   <span class="zoom" role="group" aria-label="Zoom">
     <button id="zoomOut" aria-label="Zoom out">−</button>
     <button class="pct" id="zoomPct" aria-label="Zoom to fit">100%</button>
@@ -203,12 +193,17 @@ const BOMBS=6, MULT=25, FEE=.1;          // the bet sheet shows MULT; FEE comes 
 const HOUSE_SECOND=1.15;                 // the clock ticks 15% fast. see the fine print
 const MISS_PENALTY=3, SQUINT_COST=15, SQUINT_MS=5000;
 const AMOUNTS=[10,25,50,'All in'];
-const clockFor = v => Math.round(30 + 20*v/100);                 // blurry eyes get less time
+const clockFor = v => Math.round(30 + 20*v/100);                 // tired eyes get less time
 // how far a bomb's shade sits from where it should be. bigger stakes, subtler bombs
 const stakeFactor = st => Math.max(.35, Math.min(1, 1 - Math.log10(Math.max(st,10)/10)*.45));
-const subtlety = (st, v) => stakeFactor(st) * (.3 + .7*v/100);
-// a bomb is its cell, a little darker. this much lightness comes off, at most
-const darken = f => .02 + .05*f;
+const subtlety = st => stakeFactor(st);
+// the house's noise, the same curve as the skyline in vision.js: 0 at 100 sight, 150 at none.
+// every cell gets fresh random error in every channel, several times a second
+const MAX_SIGMA=150, NOISE_MS=140;
+const sigmaFor = v => MAX_SIGMA*Math.max(0, Math.min(100, 100-v))/100;
+// a bomb is its cell, darker. this much lightness comes off: plain to see with clear eyes,
+// gone under the noise once your sight is spent
+const darken = f => .06 + .08*f;
 const shadeText = f => (darken(f)*100).toFixed(1)+'%';
 const INSIDE=[189,215,238];               // the inside of the set: Excel's pale blue, never black
 const ZMAX=8;                             // zoom, relative to the whole sheet fitting the screen
@@ -266,6 +261,24 @@ const sight = () => (1-Wallet.loss(coins))*100;  // how well you see, 0..100
 let fractal='mandelbrot', stake=10, state='betting'; // betting | playing | result
 let grid=null;          // {cols, rows, kind, cells:[{c:[r,g,b], inside, busy}]}
 let bombs=[], sel={c:0,r:0}, timeLeft=0, lastTick=0, squintUntil=0, squinted=false, revealing=false;
+// the stake is held, not gone, until the round is settled: you play at the sight you sat down with
+let held=0, noise=null;
+const playSight = () => (1-Wallet.loss(coins+held))*100;
+function sigmaNow(){
+  if(revealing) return 0;
+  return sigmaFor(playSight()) * (Date.now()<squintUntil ? .5 : 1);
+}
+// Box-Muller: one shared error per cell (lightness) and one per channel (hue)
+function roll(){
+  if(!grid) return;
+  const n=grid.cols*grid.rows*4;
+  if(!noise || noise.length!==n) noise=new Float32Array(n);
+  for(let i=0;i<n;i+=2){
+    let u=0; while(!u) u=Math.random();
+    const m=Math.sqrt(-2*Math.log(u)), a=2*Math.PI*Math.random();
+    noise[i]=m*Math.cos(a); noise[i+1]=m*Math.sin(a);
+  }
+}
 let rounds=0, wins=0, warned=false;
 const SAVE='arcade.bombsheet.v1';
 function save(){
@@ -307,10 +320,7 @@ function zoomAt(px, py, k){
   view.y = py-CH() - (py-CH()-view.y)*k;
   view.z=z; clampView(); draw(); zoomLabel();
 }
-function zoomLabel(){
-  $('zoomPct').textContent=Math.round(view.z*100)+'%';
-  canvas.style.setProperty('--zoom', Math.pow(view.z, .8).toFixed(3)); // zoom helps you aim, not see
-}
+function zoomLabel(){ $('zoomPct').textContent=Math.round(view.z*100)+'%'; }
 function fitView(){ view={z:1, x:0, y:0}; zoomLabel(); draw(); }
 function cellAt(px, py){
   const {cs, x0, y0}=geom(), c=Math.floor((px-x0)/cs), r=Math.floor((py-y0)/cs);
@@ -343,7 +353,7 @@ function newBoard(){
     if(!best || score>best.score) best={cells, score};
   }
   grid={cols, rows, kind:fractal, cells:best.cells};
-  view={z:1, x:0, y:0}; zoomLabel();
+  view={z:1, x:0, y:0}; zoomLabel(); roll();
   bombs=[];
   sel={c:Math.floor(cols/2), r:Math.floor(rows/2)};
   idleFormula();
@@ -370,7 +380,7 @@ function busyness(cells, cols, rows){
 }
 
 function plant(){
-  const {cols, rows, cells}=grid, f=subtlety(stake, sight());
+  const {cols, rows, cells}=grid, f=subtlety(stake);
   const far = (c,r) => bombs.every(b=>Math.max(Math.abs(b.c-c),Math.abs(b.r-r))>=4);
   const edge = (c,r) => c<1||r<1||c>=cols-1||r>=rows-1;
   const coloured=[], calm=[];
@@ -380,9 +390,9 @@ function plant(){
   const pool=coloured.slice(0, Math.max(BOMBS*4, Math.floor(coloured.length*.25)));
   bombs=[];
   const sink = (cell, d) => { const [h,s,l]=rgb2hsl(cell); return hsl2rgb([h, s, Math.max(0, l-d)]); };
-  // one always goes in the calm blue middle, at under half strength, where a shade is a matter of opinion
+  // one always goes in the calm blue middle, at half strength, where a shade is a matter of opinion
   const deep=calm.filter(p=>[[1,0],[-1,0],[0,1],[0,-1]].every(([dc,dr])=>cells[(p.r+dr)*cols+p.c+dc].inside));
-  if(deep.length){ const p=pickOne(deep), d=darken(f)*.4;
+  if(deep.length){ const p=pickOne(deep), d=darken(f)*.5;
     bombs.push({c:p.c, r:p.r, found:false, was:INSIDE, is:sink(INSIDE, d), drop:d, calm:true}); }
   let guard=0;
   while(bombs.length<BOMBS && guard++<2000){
@@ -402,9 +412,13 @@ function draw(){
   const r0=Math.max(0, Math.floor((hy-y0)/cs)), r1=Math.min(rows, Math.ceil((H-y0)/cs));
   ctx.save(); ctx.beginPath(); ctx.rect(hx, hy, W-hx, H-hy); ctx.clip();
   ctx.fillStyle=css('--cell'); ctx.fillRect(hx,hy,W-hx,H-hy);
+  const sg=sigmaNow(), k=v=>Math.max(0, Math.min(255, Math.round(v)));
   for(let r=r0;r<r1;r++) for(let c=c0;c<c1;c++){
-    const b=bombAt(c,r);
-    ctx.fillStyle=rgb(b ? b.is : cells[r*cols+c].c);
+    const b=bombAt(c,r), base=b ? b.is : cells[r*cols+c].c;
+    if(sg && noise){
+      const j=(r*cols+c)*4, e=noise[j]*sg, h=sg*.35;
+      ctx.fillStyle=`rgb(${k(base[0]+e+noise[j+1]*h)},${k(base[1]+e+noise[j+2]*h)},${k(base[2]+e+noise[j+3]*h)})`;
+    } else ctx.fillStyle=rgb(base);
     ctx.fillRect(x0+c*cs, y0+r*cs, Math.ceil(cs), Math.ceil(cs));
   }
   // gridlines
@@ -447,11 +461,16 @@ function draw(){
 
 // ---- vision ----
 function applyVision(){
-  Wallet.see(coins);
-  canvas.classList.toggle('clear', revealing);
-  canvas.classList.toggle('squint', !revealing && Date.now()<squintUntil);
-  $('visionBar').style.width=sight()+'%';
-  $('visionPct').textContent=Math.round(sight())+'%';
+  // the meter shows what you see right now; the number above it is what you have left
+  $('visionBar').style.width=playSight()+'%';
+  $('visionPct').textContent=Math.round(playSight())+'%';
+  draw();
+}
+// static, like the skyline: the noise re-rolls while there is any. reduced motion gets one still frame
+let lastRoll=0;
+function animate(t){
+  if(!reduceMotion && sigmaNow()>0 && t-lastRoll>NOISE_MS){ lastRoll=t; roll(); draw(); }
+  requestAnimationFrame(animate);
 }
 
 // ---- formula bar ----
@@ -486,8 +505,8 @@ function renderSheet(){
     toast('Changing the fractal is free. The odds are the same in all of them.'); });
   if(stake>coins) stake=Math.min(10, coins);
   toggleRow($('amounts'), AMOUNTS.map(a=>{ const v=a==='All in'?coins:a; return [a, v, v>coins||v<=0]; }), stake, v=>{ stake=v; save(); });
-  const f=subtlety(stake, sight());
-  $('terms').textContent = `${BOMBS} bombs · ${clockFor(sight())} seconds · bombs ${shadeText(f)} darker · the less you see, the less of both`;
+  const f=subtlety(stake);
+  $('terms').textContent = `${BOMBS} bombs · ${clockFor(playSight())} seconds · bombs ${shadeText(f)} darker · house noise ±${Math.round(sigmaFor(playSight()))}`;
   const go=$('go');
   if(coins<=0){ go.disabled=false; go.textContent='Out of sight. Back to the arcade'; go.onclick=()=>location.href='home.html'; return; }
   go.onclick=start;
@@ -497,9 +516,9 @@ function renderSheet(){
 
 function start(){
   if(state!=='betting' || stake<=0 || !Wallet.spend(stake)) return;
-  coins=Wallet.get(); rounds++; save();
+  coins=Wallet.get(); held=stake; rounds++; save();
   plant();
-  timeLeft=clockFor(sight()); squinted=false; squintUntil=0;
+  timeLeft=clockFor(playSight()); squinted=false; squintUntil=0;
   state='playing';
   $('sheet').classList.add('hidden');
   $('squintBtn').disabled = coins<SQUINT_COST;
@@ -512,7 +531,7 @@ function start(){
 function updateStatus(){
   // between rounds the bar previews the next one
   const betting=state==='betting';
-  const found=betting ? 0 : bombs.filter(b=>b.found).length, s=Math.max(0, Math.ceil(betting ? clockFor(sight()) : timeLeft));
+  const found=betting ? 0 : bombs.filter(b=>b.found).length, s=Math.max(0, Math.ceil(betting ? clockFor(playSight()) : timeLeft));
   if(betting) $('squintBtn').disabled=true;
   $('found').textContent=`${found}/${BOMBS}`;
   $('clock').textContent=`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
@@ -556,7 +575,7 @@ function showResult(html, ms, then){
 function win(){
   state='result'; wins++;
   const gross=stake*MULT, fee=Math.round(gross*FEE);
-  coins=Wallet.add(stake+gross-fee); save(); updateHud();
+  held=0; coins=Wallet.add(stake+gross-fee); save(); updateHud();
   setFormula('', `=SUM(winnings)-booth_fee`);
   showResult(`Every bomb found<strong class="w">+${fmt(gross-fee)}</strong>
     <small>Less a ${fmt(fee)} booth maintenance fee, charged on winnings only. Everything looks a little sharper.</small>`, 3400, endRound);
@@ -567,13 +586,12 @@ function lose(){
   const quiet=bombs.find(b=>b.calm && !b.found);
   setFormula('', `=COUNTIF(${'A1:'+ref(grid.cols-1, grid.rows-1)},"bomb")`, String(BOMBS));
   // for a moment, everything is clear, so you can see how close they were
-  revealing=true; canvas.classList.add('easing'); applyVision(); draw();
+  revealing=true; applyVision();
   const close = found===BOMBS-1 ? `<small>${found} of ${BOMBS}. One bomb away from ${fmt(stake*MULT)}!</small>` : `<small>${found} of ${BOMBS} found.</small>`;
   const note = quiet ? `<small>One was in the blue, ${(quiet.drop*100).toFixed(1)}% darker than the blue. Technically visible.</small>` : '';
-  showResult(`Time’s up<strong class="l">−${fmt(stake)}</strong>${close}${note}<small>For a moment, you can see everything you bet.</small>`, 4200, ()=>{
-    revealing=false; applyVision(); draw();
+  showResult(`Time’s up<strong class="l">−${fmt(stake)}</strong>${close}${note}<small>For a moment, the noise lifts and you can see everything you bet.</small>`, 4200, ()=>{
+    revealing=false; held=0; roll(); applyVision();
     if(!warned && sight()<60){ warned=true; save(); setTimeout(()=>toast('Your sight is now below the arcade average.'), 1200); }
-    setTimeout(()=>canvas.classList.remove('easing'), 1000);
     endRound();
   });
 }
@@ -602,7 +620,7 @@ function shop(){
     <p>You see ${Math.round(sight())}% of the sheet. ${sight()<60 ? 'That is below the arcade average.' : 'For now.'}</p>` +
     Wallet.PACKS.map((pk,i)=>`<div class="item"><div><b>${pk.name}, ${fmt(pk.coins)}</b><p>${pk.note}</p></div>
       <button data-i="${i}">${money(pk.price)}*</button></div>`).join('') +
-    `<div class="item"><div><b>Squint</b><p>Halves the blur for 5 seconds. One per round, during a round. Zooming in magnifies the blur too.</p></div>
+    `<div class="item"><div><b>Squint</b><p>Halves the house noise for 5 seconds. One per round, during a round.</p></div>
       <button disabled>${SQUINT_COST} sight</button></div>
     <p class="fine">*All prices are pretend. There’s no real money, card, or checkout anywhere in the arcade.</p>`,
     [{label:'Close', onClick:closeModal}]);
@@ -613,7 +631,7 @@ function shop(){
 $('shopBtn').onclick=()=>{ if(state==='playing') return toast('The shop is closed while the clock is running.'); shop(); };
 $('squintBtn').onclick=()=>{
   if(state!=='playing' || squinted || !Wallet.spend(SQUINT_COST)) return;
-  // squinting costs sight, so the blur it halves is a little worse than before
+  // squinting costs sight, so the noise it halves is a little worse than before
   coins=Wallet.get(); squinted=true; squintUntil=Date.now()+SQUINT_MS;
   $('squintBtn').disabled=true; updateHud(); say('Squinting', 1200);
 };
@@ -624,7 +642,7 @@ function broke(){
 $('howBtn').onclick=()=>openModal(`<h3>How it works</h3>
   <p>${BOMBS} cells in the sheet are a shade darker than the fractal says they should be. Scroll or pinch to zoom, and drag to move around. Tap each one before the clock runs out.</p>
   <p>You bet sight. A wrong cell costs ${MISS_PENALTY} seconds. Find all ${BOMBS} and win ${MULT}× your stake, less a booth fee.</p>
-  <p>The less sight you have, the blurrier the sheet, the shorter the clock, and the fainter the bombs, in this game and every other one.</p>
+  <p>The less sight you have, the more of the house’s noise lands on every cell, and the shorter the clock. Clear eyes see the bombs. Spent ones see static.</p>
   <p class="fine">Bigger stakes hide the bombs better. One bomb always hides in the calm blue middle, fainter than the rest. Seconds are house seconds, which are ${Math.round((HOUSE_SECOND-1)*100)}% shorter. Rounds played: ${rounds}. Rounds won: ${wins}.</p>`,
   [{label:'Got it', primary:true, onClick:closeModal}]);
 $('footBtn').onclick=()=>openModal(`<h3>Play responsibly</h3>
@@ -704,6 +722,7 @@ addEventListener('pageshow', ()=>{ coins=Wallet.get(); updateHud(); if(state==='
 // ---- boot ----
 load();
 measure(); newBoard(); renderSheet(); updateHud();
+requestAnimationFrame(animate);
 </script>
 </body>
 </html>
