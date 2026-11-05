@@ -59,6 +59,14 @@
   .wrap { flex:1; position:relative; margin:0 12px; min-height:0; border:1px solid var(--grid-edge); background:var(--grid-head); overflow:hidden; }
   canvas { display:block; position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:cell; }
   canvas.grabbing { cursor:grabbing; }
+  /* +1s / −2s, floating up from the cell you tapped */
+  .float { position:absolute; z-index:3; transform:translate(-50%,-100%); margin:0; padding:2px 7px; border-radius:9px;
+    font:600 14px ui-sans-serif, system-ui, sans-serif; font-variant-numeric:tabular-nums; white-space:nowrap; pointer-events:none;
+    background:var(--sheet); box-shadow:0 2px 8px rgba(0,0,0,.25); animation:floatup .9s ease-out forwards; }
+  .float.gain { color:var(--win); } .float.cost { color:var(--lose); }
+  @keyframes floatup { 0% { opacity:0; translate:0 4px; } 15% { opacity:1; translate:0 0; } 70% { opacity:1; } 100% { opacity:0; translate:0 -18px; } }
+  @media (prefers-reduced-motion: reduce) { .float { animation:floatfade .9s linear forwards; } }
+  @keyframes floatfade { 0%,70% { opacity:1; } 100% { opacity:0; } }
   .caption { position:absolute; left:50%; top:10px; transform:translateX(-50%); margin:0; max-width:86%;
     padding:5px 12px; border-radius:14px; background:var(--sheet); color:var(--sheet-ink); font-style:italic; font-size:15px;
     box-shadow:0 2px 10px rgba(0,0,0,.18); pointer-events:none; text-align:center; }
@@ -106,6 +114,7 @@
   .tune label { display:grid; grid-template-columns:1fr 46px; gap:2px 6px; margin:4px 0; }
   .tune input { grid-column:1 / -1; width:100%; }
   .tune b { font-weight:600; }
+  .tune[hidden] { display:none; }
   [aria-pressed="true"] { border-color:var(--accent) !important; box-shadow:inset 0 0 0 1.5px var(--accent); }
   .row.seg { gap:0; border:1.5px solid var(--line); border-radius:12px; overflow:hidden; }
   .row.seg button { border:0; border-left:1.5px solid var(--line); border-radius:0; font-size:14px; }
@@ -215,14 +224,15 @@ const TUNE={
   bombs:5, clock:20,          // a round: this many bombs, this many house seconds
   house:1.15,                 // a house second is this much shorter than yours
   miss:2,                     // seconds a wrong cell costs
-  noise0:2.6,                 // house noise at your starting sight, in shades (CIELAB L*)
+  bonus:1,                    // seconds a bomb gives back
+  noise0:.5,                  // house noise at your starting sight, in shades (CIELAB L*)
   perHalf:1.14,               // noise grows by this for every halving below the start
   perDouble:.7,               // and shrinks by this for every doubling above it
   // most bombs are easy: this many shades darker, at random in this range, whatever your sight
   easyLo:10, easyHi:14,
   // and the last few are not. hard bombs are dLo shades darker at your starting sight; every doubling
   // above it takes rig shades off, down to dMin. This is the only darkness that moves with your sight
-  hard:1, dLo:5, rig:1.5, dMin:1.5,
+  hard:1, dLo:6, rig:1.5, dMin:1.5,
 };
 const SQUINT_MS=5000, NOISE_MS=140, RMAX=6;
 const START = () => Wallet.START;
@@ -684,7 +694,7 @@ function start(){
   plant();
   timeLeft=TUNE.clock; squinted=false; squintUntil=0;
   state='playing';
-  $('sheet').classList.add('hidden');
+  $('sheet').classList.add('hidden'); tunePanel();
   $('squintBtn').textContent=`Squint · ${fmt(squintCost())}`;
   $('squintBtn').disabled = coins<squintCost();
   updateHud(); updateStatus(); draw();
@@ -723,15 +733,23 @@ function tick(now){
   requestAnimationFrame(tick);
 }
 
+// a little tag that floats up from just above a cell (or a bomb's block) and fades
+function floatAt(c, r, size, text, cls){
+  const {cs, x0, y0}=geom(), wrap=$('wrap'), el=document.createElement('p');
+  el.className=`float ${cls}`; el.textContent=text;
+  const x=Math.max(RH()+24, Math.min(W-24, x0+(c+size/2)*cs)), y=Math.max(CH()+24, y0+r*cs-3);
+  el.style.left=x+'px'; el.style.top=y+'px';
+  wrap.appendChild(el); setTimeout(()=>el.remove(), 950);
+}
 function check(c, r){
   if(state!=='playing') return;
   sel={c,r};
   const b=bombAt(c,r), name=ref(c,r), f=`=ISBOMB(${name})`;
-  if(b && b.found){ setFormula(name, f, 'TRUE'); say('Already found that one', 1400); draw(); return; }
+  if(b && b.found){ setFormula(name, f, 'TRUE'); floatAt(c, r, 1, 'Already found', 'cost'); draw(); return; }
   if(b){
     b.found=true; setFormula(name, f, 'TRUE');
     const left=bombs.filter(x=>!x.found).length;
-    say(left ? `${left} to go` : 'That’s all of them', 1200);
+    if(left && TUNE.bonus){ timeLeft+=TUNE.bonus; floatAt(b.c, b.r, b.size, `+${TUNE.bonus}s`, 'gain'); }
     draw(); updateStatus();
     if(!left) win();
     return;
@@ -739,7 +757,7 @@ function check(c, r){
   timeLeft-=TUNE.miss;
   const near=bombs.some(x=>!x.found && c>=x.c-x.size && c<x.c+2*x.size && r>=x.r-x.size && r<x.r+2*x.size);
   setFormula(name, f, 'FALSE');
-  say(near ? `So close. Right next to one. −${TUNE.miss}s` : `Not a bomb. −${TUNE.miss}s`, 1300);
+  floatAt(c, r, 1, near ? `−${TUNE.miss}s · so close` : `−${TUNE.miss}s`, 'cost');
   draw(); updateStatus();
 }
 
@@ -817,11 +835,13 @@ function endRound(before){
 }
 
 // ---- ?tune: sliders on everything the house can turn, and a live win rate ----
-const TUNABLE=[['bombs',1,10,1],['clock',5,60,1],['house',1,1.6,.05],['miss',0,6,.5],['noise0',0,12,.1],
+const TUNABLE=[['bombs',1,10,1],['clock',5,60,1],['house',1,1.6,.05],['miss',0,6,.5],['bonus',0,5,.5],['noise0',0,12,.1],
   ['perHalf',1,1.6,.01],['perDouble',.3,1,.05],['easyLo',0,30,.5],['easyHi',0,30,.5],['hard',0,5,1],['dLo',0,20,.5],['rig',0,5,.25],['dMin',0,10,.5]];
 function tunePanel(){
   if(!new URLSearchParams(location.search).has('tune')) return;
   let el=$('tune');
+  if(el) el.hidden = state!=='betting';
+  if(state!=='betting') return;
   if(!el){
     el=document.createElement('div'); el.id='tune'; el.className='tune'; document.body.appendChild(el);
     el.innerHTML=TUNABLE.map(([k,a,b,st])=>`<label>${k}<b id="tv-${k}"></b><input type="range" min="${a}" max="${b}" step="${st}" data-k="${k}"></label>`).join('')
@@ -875,7 +895,7 @@ function broke(){
 }
 $('howBtn').onclick=()=>openModal(`<h3>How it works</h3>
   <p>${TUNE.bombs} cells in the sheet are a few shades darker than the fractal says they should be. Tap each one before the clock runs out. Scroll or pinch to zoom, and drag to move around.</p>
-  <p>You bet sight, double or nothing. A wrong cell costs ${TUNE.miss} seconds. Once you’ve found two, the house will offer to buy the round back early.</p>
+  <p>You bet sight, double or nothing. A wrong cell costs ${TUNE.miss} seconds; every bomb you find gives ${TUNE.bonus} back. Once you’ve found two, the house will offer to buy the round back early.</p>
   <p>Lose sight and the house lays noise over every cell. Gain it and the sheet gets finer, with the same size bombs.</p>
   <p class="fine">The table minimum is ${fmt(MIN_BET())} sight. Players who double their sight have their stakes reviewed. Most bombs are easy. The last one is not, and the house makes it fainter for players who can see more. Seconds are house seconds, which are ${Math.round((TUNE.house-1)*100)}% shorter. Rounds played: ${rounds}. Rounds won: ${wins}.</p>`,
   [{label:'Got it', primary:true, onClick:closeModal}]);
