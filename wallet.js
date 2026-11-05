@@ -11,6 +11,9 @@
 //   Wallet.unit(n)      -> 'sight' (the word to print next to a number)
 //   Wallet.see(n)       -> applies the loss of vision for a balance of n to the page
 //   Wallet.PACKS        -> the sight packs every shop sells (all prices are pretend)
+//   Wallet.charge(usd)  -> record a pretend purchase; returns the new lifetime total
+//   Wallet.spent()      -> pretend dollars spent across the whole arcade
+//   Wallet.onSpend(fn)  -> fn(total) when another tab records a purchase
 //
 // Pages style the loss with two CSS variables Wallet.see() sets on <html>:
 //   --loss  0 (perfect sight, START or more) .. 1 (nothing left)
@@ -18,6 +21,14 @@
 (function(){
   const KEY='arcade.wallet.v1', START=100;
   const LEGACY='koipondstakes.v1'; // the pond kept its own balance before the arcade existed
+  const SPENT='arcade.spent.v1';   // lifetime pretend dollars, in cents so the sums stay exact
+  function readCents(){
+    try { const d=JSON.parse(localStorage.getItem(SPENT)||'null'); if(d && ok(d.cents)) return d.cents; } catch(e){}
+    // first time: start from whatever the pond already counted before the arcade kept a total
+    let c=0; try { const d=JSON.parse(localStorage.getItem(LEGACY)||'null'); if(d && ok(d.spent)) c=Math.round(d.spent*100); } catch(e){}
+    writeCents(c); return c;
+  }
+  function writeCents(c){ try { localStorage.setItem(SPENT, JSON.stringify({cents:c, updated:Date.now()})); } catch(e){} }
   const ok = n => typeof n==='number' && isFinite(n) && n>=0;
 
   function read(){
@@ -53,6 +64,10 @@
     spend(n){ const c=this.get(); if(n>c) return false; this.set(c-n); return true; },
     onChange(fn){ addEventListener('storage', e=>{ if(e.key===KEY){ this.see(); fn(this.get()); } }); },
     unit(){ return 'sight'; },
+    spent(){ return readCents()/100; },
+    charge(usd){ if(ok(usd)) writeCents(readCents()+Math.round(usd*100)); return this.spent(); },
+    resetSpent(){ writeCents(0); },
+    onSpend(fn){ addEventListener('storage', e=>{ if(e.key===SPENT) fn(this.spent()); }); },
     loss(n=this.get()){ return Math.min(1, Math.max(0, 1 - n/START)); },
     see(n=this.get()){
       const l=this.loss(n), s=document.documentElement.style;

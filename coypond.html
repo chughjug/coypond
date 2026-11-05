@@ -379,7 +379,7 @@
 <div class="backdrop" id="modal" hidden><div class="card" id="card" role="dialog" aria-modal="true"></div></div>
 <div class="toast" id="toast" role="status"></div>
 
-<script src="wallet.js"></script>
+<script src="wallet.js?v=2"></script>
 <script>
 const canvas = document.getElementById('pond'), ctx = canvas.getContext('2d');
 const $ = id => document.getElementById(id);
@@ -1339,10 +1339,10 @@ function openStore(){
 function buyPack(pk, optIn){
   const doubled = firstBuy && pk.hot;
   const got = pk.coins*(doubled?2:1);
-  coins+=got; spent+=pk.price; firstBuy=false; tierPoints+=pk.price; bump('buy');
+  coins+=got; spent+=pk.price; Wallet.charge(pk.price); firstBuy=false; tierPoints+=pk.price; bump('buy');
   if(pk.hot) whale=true;
   const joined = optIn && !club;
-  if(joined){ startClub(); spent+=clubPrice; tierPoints+=clubPrice; }
+  if(joined){ startClub(); spent+=clubPrice; Wallet.charge(clubPrice); tierPoints+=clubPrice; }
   updateHud(); renderSheet(); save();
   openModal(`<h3>Purchase complete</h3><div class="receipt">
       <div><span>${pk.name}</span><span>+${fmt(got)} sight</span></div>
@@ -1356,7 +1356,7 @@ function buyPack(pk, optIn){
 }
 function startClub(){
   club=true; clearInterval(clubTimer);
-  clubTimer=setInterval(()=>{ spent+=clubPrice; coins+=100; updateHud(); renderSheet(); save();
+  clubTimer=setInterval(()=>{ spent+=clubPrice; Wallet.charge(clubPrice); coins+=100; updateHud(); renderSheet(); save();
     toast(`Sight Club renewed: ${money(clubPrice)} (pretend). +100 sight`); }, 45000);
 }
 function cancelClub1(){

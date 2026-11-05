@@ -103,7 +103,7 @@
 <section class="store" id="store" hidden><div class="shop" role="dialog" aria-modal="true" aria-labelledby="shopTitle" id="shopCard"></div></section>
 <div class="toast" id="toast" role="status"></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="wallet.js"></script>
+<script src="wallet.js?v=2"></script>
 <script>
 // OpenStreetMap/Nominatim place centers, checked October 29, 2026.
 const PLACES = [
@@ -163,7 +163,7 @@ function renderShop(focusSel){
     if(q>0) cart.set(i,q); else cart.delete(i); renderShop(cart.has(i) ? `[data-dec="${i}"]` : '#shopClose'); showCount(); });
   $('shopClose').onclick=closeShop;
   $('checkout').onclick=()=>{ const t=cartTotals(); if(!t.items) return;
-    Wallet.add(t.coins); cart.clear(); showSight(); showCount(); closeShop();
+    Wallet.charge(t.price); Wallet.add(t.coins); cart.clear(); showSight(); showCount(); closeShop();
     toast(`+${fmtN(t.coins)} sight. Pretend charge: ${money(t.price)}`); };
   const f=focusSel && $('shopCard').querySelector(focusSel); (f||$('shopClose')).focus();
 }
