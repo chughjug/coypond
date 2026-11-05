@@ -226,7 +226,7 @@ const TUNE={
   miss:2,                     // seconds a wrong cell costs
   bonus:1,                    // seconds a bomb gives back
   noise0:.5,                  // house noise at your starting sight, in shades (CIELAB L*)
-  perHalf:1.14,               // noise grows by this for every halving below the start
+  perHalf:2,                  // noise grows by this for every halving below the start
   perDouble:.7,               // and shrinks by this for every doubling above it
   // most bombs are easy: this many shades darker, at random in this range, whatever your sight
   easyLo:10, easyHi:14,
@@ -836,7 +836,7 @@ function endRound(before){
 
 // ---- ?tune: sliders on everything the house can turn, and a live win rate ----
 const TUNABLE=[['bombs',1,10,1],['clock',5,60,1],['house',1,1.6,.05],['miss',0,6,.5],['bonus',0,5,.5],['noise0',0,12,.1],
-  ['perHalf',1,1.6,.01],['perDouble',.3,1,.05],['easyLo',0,30,.5],['easyHi',0,30,.5],['hard',0,5,1],['dLo',0,20,.5],['rig',0,5,.25],['dMin',0,10,.5]];
+  ['perHalf',1,4,.05],['perDouble',.3,1,.05],['easyLo',0,30,.5],['easyHi',0,30,.5],['hard',0,5,1],['dLo',0,20,.5],['rig',0,5,.25],['dMin',0,10,.5]];
 function tunePanel(){
   if(!new URLSearchParams(location.search).has('tune')) return;
   let el=$('tune');
