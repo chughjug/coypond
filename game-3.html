@@ -14,6 +14,12 @@
   button:focus-visible, a:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
   #map { position:absolute; inset:0; z-index:0; background:#e5e3d8; }
   .leaflet-container { font-family:Arial,sans-serif; }
+  /* the map is played for your sight: as it runs out the streets blur and the dark closes in from the edges.
+     --loss and --blur come from wallet.js. Guess markers and the cards stay sharp, so you can always read your result. */
+  .leaflet-tile-pane { filter:blur(var(--blur,0px)); transition:filter .8s ease; }
+  .blind { position:absolute; inset:0; z-index:450; pointer-events:none; transition:background .8s ease;
+    background:radial-gradient(ellipse at 50% 45%, transparent calc(78% - var(--loss,0)*70%),
+      rgba(5,12,11,calc(var(--loss,0)*.95)) calc(100% - var(--loss,0)*55%)); }
   .top { position:absolute; z-index:500; top:max(12px,env(safe-area-inset-top)); left:12px; right:12px; display:flex; justify-content:space-between; gap:12px; pointer-events:none; }
   .card { background:var(--sheet); border:1px solid var(--line); border-radius:15px; box-shadow:0 5px 20px #0003; padding:11px 14px; pointer-events:auto; }
   .target { width:min(410px,calc(100vw - 110px)); }
@@ -39,6 +45,7 @@
 </head>
 <body>
 <div id="map" role="application" aria-label="Interactive map of Chicago. Drag to pan and use plus and minus to zoom."></div>
+<div class="blind" aria-hidden="true"></div>
 <header class="top">
   <div class="card target">
     <p class="eyebrow" id="progress">Find Chicago · 1 of 5</p>
@@ -54,7 +61,7 @@
 <section class="shade" id="shade" aria-live="polite">
   <div class="modal">
     <h2 id="resultTitle">Find Chicago</h2>
-    <p id="resultText">Find five Chicago landmarks on the map. You get 25 seconds and one click for each. A click within about two blocks counts. Find all five to win 25 sight.</p>
+    <p id="resultText">Find five Chicago landmarks on the map. You get 25 seconds and one click for each. A click within about two blocks counts. Find all five to win 25 sight. <span id="sightNote"></span></p>
     <button type="button" id="action">Start game</button>
     <a href="home.html">Back to the arcade</a>
   </div>
@@ -74,6 +81,14 @@ const SECONDS=25, START=[41.8781,-87.6298], REWARD=25;
 const $=id=>document.getElementById(id);
 let map, round=-1, deadline=0, tick=null, locked=true, reveal=null, nextTimer=null;
 const rewardKey='arcade.find-chicago.reward.v1';
+// how much you can see: wallet.js blurs the streets for this balance; say so on the intro card
+function showSight(){
+  const n=Wallet.get(); Wallet.see(n);
+  const note=$('sightNote'); if(!note) return;
+  note.textContent = n>=Wallet.START ? `You have ${Math.floor(n).toLocaleString('en-US')} sight, so the streets are clear.`
+    : `You have ${Math.floor(n).toLocaleString('en-US')} sight, so the streets will be ${n<Wallet.START*.4?'a fog':n<Wallet.START*.75?'blurry':'a little soft'}.`;
+}
+showSight(); Wallet.onChange(showSight); addEventListener('pageshow', showSight);
 function clearReveal(){ if(reveal){ reveal.remove(); reveal=null; } }
 function setTimer(seconds){ $('timer').firstChild.textContent=String(seconds); $('timer').classList.toggle('urgent',seconds<=5); }
 function stopClock(){ if(tick){ clearInterval(tick); tick=null; } }
