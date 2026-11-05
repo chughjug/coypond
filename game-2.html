@@ -226,7 +226,7 @@ const TUNE={
   miss:2,                     // seconds a wrong cell costs
   bonus:1,                    // seconds a bomb gives back
   noise0:.5,                  // house noise at your starting sight, in shades (CIELAB L*)
-  perHalf:2,                  // noise grows by this for every halving below the start
+  perHalf:2.2,                // noise grows by this for every halving below the start
   perDouble:.7,               // and shrinks by this for every doubling above it
   // most bombs are easy: this many shades darker, at random in this range, whatever your sight
   easyLo:10, easyHi:14,
@@ -662,7 +662,7 @@ function renderSheet(){
   // the house's favourite option is the big one
   const ride=$('ride'), rs=rideStake(), lost=last && !last.won;
   ride.innerHTML = `<span>${lost ? 'Win it back' : 'Let it ride'}</span><span>${rs ? fmt(stakeFor('ride'))+(capped('ride')?' (max)':'') : ''}
-    <small>${!last ? 'after your first round' : lost ? `you lost ${fmt(rs)}` : `you won ${fmt(last.back-last.stake)}`}</small></span>`;
+    <small>${!last ? 'after your first round' : lost ? `you lost ${fmt(rs)}` : (last.back>last.stake ? `you won ${fmt(last.back-last.stake)}` : 'you broke even')}</small></span>`;
   ride.disabled=!open('ride'); ride.setAttribute('aria-pressed', opt==='ride');
   ride.onclick=()=>{ opt='ride'; renderSheet(); };
   const row=$('amounts'); row.innerHTML='';
@@ -708,7 +708,8 @@ function start(){
 function cashOffer(){
   const found=bombs.filter(b=>b.found).length, n=TUNE.bombs;
   if(found<2 || found>=n) return 0;
-  return Math.round(stake*2*Math.pow(found/n, 1.6)*(.55+.45*Math.max(0, timeLeft)/TUNE.clock));
+  // never more than your own stake back: cashing out can save a round, never win one
+  return Math.min(stake, Math.round(stake*2*Math.pow(found/n, 1.6)*(.55+.45*Math.max(0, timeLeft)/TUNE.clock)));
 }
 $('cashBtn').onclick=()=>{ if(state==='playing' && cashOffer()>0) cashOut(); };
 
@@ -793,7 +794,7 @@ function cashOut(){
   const offer=cashOffer(), found=bombs.filter(b=>b.found).length, before=settle(offer);
   revealing=true; applyVision(); updateHud();
   setFormula('', `=CASHOUT(${found}/${TUNE.bombs})`, fmt(offer));
-  showResult(`Cashed out<strong class="${offer>=stake?'w':'l'}">${offer>=stake?'+':'−'}${fmt(Math.abs(offer-stake))}</strong>
+  showResult(`Cashed out<strong class="${offer>=stake?'w':'l'}">${offer>=stake ? '±0' : '−'+fmt(stake-offer)}</strong>
     <small>${found} of ${TUNE.bombs} found. Finishing would have paid ${fmt(stake*2)}.</small>${eyes(before, coins)}`, 3200, ()=>{
     revealing=false; roll(); applyVision(); endRound(before); });
 }
@@ -895,7 +896,7 @@ function broke(){
 }
 $('howBtn').onclick=()=>openModal(`<h3>How it works</h3>
   <p>${TUNE.bombs} cells in the sheet are a few shades darker than the fractal says they should be. Tap each one before the clock runs out. Scroll or pinch to zoom, and drag to move around.</p>
-  <p>You bet sight, double or nothing. A wrong cell costs ${TUNE.miss} seconds; every bomb you find gives ${TUNE.bonus} back. Once you’ve found two, the house will offer to buy the round back early.</p>
+  <p>You bet sight, double or nothing. A wrong cell costs ${TUNE.miss} seconds; every bomb you find gives ${TUNE.bonus} back. Once you’ve found two, the house will offer to buy the round back early, for at most what you bet.</p>
   <p>Lose sight and the house lays noise over every cell. Gain it and the sheet gets finer, with the same size bombs.</p>
   <p class="fine">The table minimum is ${fmt(MIN_BET())} sight. Players who double their sight have their stakes reviewed. Most bombs are easy. The last one is not, and the house makes it fainter for players who can see more. Seconds are house seconds, which are ${Math.round((TUNE.house-1)*100)}% shorter. Rounds played: ${rounds}. Rounds won: ${wins}.</p>`,
   [{label:'Got it', primary:true, onClick:closeModal}]);
