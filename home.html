@@ -68,6 +68,7 @@
   .station .soon { display:block; font-size:11px; font-weight:400; color:var(--accent); text-align:center; letter-spacing:.06em; text-transform:uppercase; }
   .station.near .label { outline:2px solid var(--accent); }
   .station svg { display:block; overflow:visible; }
+  .station[hidden] { display:none; }
 
   .walker { position:absolute; width:30px; height:30px; margin:-15px 0 0 -15px; border-radius:50%; z-index:3; pointer-events:none;
     background:radial-gradient(circle at 35% 30%, #fff6 0 4px, transparent 5px), var(--coin);
@@ -169,7 +170,7 @@
     <span class="label">Bomb Sheet</span>
   </a>
 
-  <a class="station" id="st-game-3" href="game-3.html" data-id="game-3">
+  <a class="station" id="st-game-3" href="game-3.html" data-id="game-3" hidden>
     <svg width="90" height="80" viewBox="-45 -40 90 80" aria-hidden="true">
       <path d="M-36 34 V-6 a36 30 0 0 1 72 0 V34 Z" fill="var(--wood)"/>
       <path d="M-36 -6 a36 30 0 0 1 72 0" fill="none" stroke="var(--wood-dark)" stroke-width="6"/>
@@ -205,14 +206,16 @@ const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const fmt = n => Math.floor(n).toLocaleString('en-US');
 
 // Add a game: give it its own .html file, a station in the markup, and an entry here.
-const GAMES = [
+const ALL_GAMES = [
   { id:'game-2', file:'game-2.html', name:'Bomb Sheet', ready:true,
     desc:'Six bombs hide in a fractal spreadsheet, each a shade off from its neighbours. Bet sight, find them all before the clock runs out, and see a little better. Miss, and see a little worse.' },
   { id:'coypond', file:'coypond.html', name:'Koi Pond Stakes', ready:true,
     desc:'Bet your sight on which koi eats the pellet first. Whatever you win or lose comes back here with you.' },
-  { id:'game-3', file:'game-3.html', name:'Locked tent', ready:false,
+  { id:'game-3', file:'game-3.html', name:'Locked tent', ready:false, hidden:true, // hidden: set false to bring the tent back
     desc:'The flap is tied shut. A sign says “soon,” and has said so for a while.' },
 ];
+const GAMES = ALL_GAMES.filter(g=>!g.hidden);
+ALL_GAMES.forEach(g=>{ $('st-'+g.id).hidden = !!g.hidden; });
 const HUB='arcade.hub.v1', NEAR=70, SPEED=4.2, STAND=82; // STAND: how far below a station you stand
 
 let W, H, stations={}, gate={x:0,y:0};
@@ -223,8 +226,9 @@ function layout(){
   W=innerWidth; H=innerHeight;
   const wide = W > H*1.1;
   // spots are fractions of the screen; tall screens stack the games up a winding path
-  const spots = wide
-    ? [[.2,.45],[.5,.32],[.8,.45]]
+  const spots = GAMES.length===2
+    ? (wide ? [[.3,.4],[.7,.4]] : [[.5,.3],[.5,.58]])
+    : wide ? [[.2,.45],[.5,.32],[.8,.45]]
     : [[.27,.62],[.5,.3],[.73,.62]];
   gate = wide ? {x:W*.5, y:H*.8} : {x:W*.5, y:H*.86};
   GAMES.forEach((g,i)=>{
