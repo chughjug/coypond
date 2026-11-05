@@ -170,7 +170,7 @@
     <span class="label">Bomb Sheet</span>
   </a>
 
-  <a class="station" id="st-game-3" href="game-3.html" data-id="game-3" hidden>
+  <a class="station" id="st-game-3" href="game-3.html" data-id="game-3">
     <svg width="90" height="80" viewBox="-45 -40 90 80" aria-hidden="true">
       <path d="M-36 34 V-6 a36 30 0 0 1 72 0 V34 Z" fill="var(--wood)"/>
       <path d="M-36 -6 a36 30 0 0 1 72 0" fill="none" stroke="var(--wood-dark)" stroke-width="6"/>
@@ -179,7 +179,7 @@
       <g><rect x="-40" y="18" width="80" height="9" fill="var(--hazard)" transform="rotate(7)"/>
         <path d="M-34 18 l6 9 M-20 18 l6 9 M-6 18 l6 9 M8 18 l6 9 M22 18 l6 9" stroke="#222" stroke-width="4" transform="rotate(7)"/></g>
     </svg>
-    <span class="label">Locked tent<span class="soon">Coming soon</span></span>
+    <span class="label">Find Chicago</span>
   </a>
 
   <div class="walker" id="walker" aria-hidden="true"></div>
@@ -211,8 +211,8 @@ const ALL_GAMES = [
     desc:'Six bombs hide in a fractal spreadsheet, each a shade off from its neighbours. Bet sight, find them all before the clock runs out, and see a little better. Miss, and see a little worse.' },
   { id:'coypond', file:'coypond.html', name:'Koi Pond Stakes', ready:true,
     desc:'Bet your sight on which koi eats the pellet first. Whatever you win or lose comes back here with you.' },
-  { id:'game-3', file:'game-3.html', name:'Locked tent', ready:false, hidden:true, // hidden: set false to bring the tent back
-    desc:'The flap is tied shut. A sign says “soon,” and has said so for a while.' },
+  { id:'game-3', file:'game-3.html', name:'Find Chicago', ready:true, hidden:false,
+    desc:'Search the city map for five landmarks. You get 25 seconds and one guess for each place.' },
 ];
 const GAMES = ALL_GAMES.filter(g=>!g.hidden);
 ALL_GAMES.forEach(g=>{ $('st-'+g.id).hidden = !!g.hidden; });
