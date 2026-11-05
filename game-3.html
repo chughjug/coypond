@@ -31,6 +31,7 @@
   .timer.urgent { color:#b72b14; }
   .bottom { position:absolute; z-index:500; bottom:max(22px,env(safe-area-inset-bottom)); left:12px; right:12px; display:flex; align-items:end; justify-content:space-between; gap:12px; pointer-events:none; }
   .bottom > * { pointer-events:auto; }
+  .bottom #status { margin-right:auto; }
   .bottom .card { font:13px/1.4 Arial,sans-serif; max-width:530px; }
   .bottom button { border:0; border-radius:12px; padding:11px 14px; background:var(--accent); color:var(--accent-ink); font-weight:700; cursor:pointer; }
   .shade { position:absolute; z-index:900; inset:0; display:grid; place-items:center; background:#13241fcc; padding:20px; }
@@ -40,7 +41,39 @@
   .modal p { font:16px/1.5 Arial,sans-serif; margin:0 0 16px; }
   .modal button { border:0; background:var(--accent); color:var(--accent-ink); border-radius:12px; padding:12px 18px; font-weight:700; cursor:pointer; }
   .modal a { display:inline-block; margin-left:12px; color:var(--ink); }
-  @media (max-width:580px) { .top { left:8px; right:8px; } .target { width:calc(100vw - 105px); } h1 { font-size:19px; } .bottom { align-items:stretch; flex-direction:column; } .bottom .card { max-width:none; } }
+  /* buy sight: the same packs every shop in the arcade sells (wallet.js), through a cart */
+  .wallet { display:flex; align-items:center; gap:10px; padding:7px 7px 7px 14px; font:13px Arial,sans-serif; }
+  .wallet b { font-size:18px; font-variant-numeric:tabular-nums; }
+  .bottom .wallet button, .modal .buy { position:relative; background:transparent; color:var(--ink); border:1.5px solid var(--accent); }
+  .modal .buy { margin-left:10px; padding:10.5px 16px; }
+  .count { position:absolute; top:-8px; right:-8px; min-width:20px; height:20px; padding:0 5px; border-radius:10px; background:var(--accent); color:var(--accent-ink); font:700 12px/20px Arial,sans-serif; }
+  .count[hidden] { display:none; }
+  .store { position:absolute; z-index:950; inset:0; display:grid; place-items:center; background:#13241fcc; padding:16px; }
+  .store[hidden] { display:none; }
+  .shop { width:min(460px,100%); max-height:calc(100vh - 32px); overflow-y:auto; background:var(--sheet); border-radius:20px; padding:20px; box-shadow:0 12px 36px #0005; font:14px/1.4 Arial,sans-serif; }
+  .shop h2 { font:700 24px "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif; margin:0 0 4px; }
+  .shop h3 { font:700 12px Arial,sans-serif; letter-spacing:.1em; text-transform:uppercase; opacity:.7; margin:16px 0 8px; }
+  .shop .fine { font-size:12.5px; opacity:.72; margin:0 0 10px; }
+  .shop button { font:700 14px Arial,sans-serif; border-radius:10px; padding:8px 12px; cursor:pointer; border:1.5px solid var(--accent); background:transparent; color:var(--ink); white-space:nowrap; }
+  .shop button.primary { background:var(--accent); color:var(--accent-ink); }
+  .shop button:disabled { opacity:.45; cursor:default; }
+  .pack, .line { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 12px; border:1.5px solid var(--line); border-radius:13px; margin-bottom:8px; }
+  .pack.hot { border-color:#c99d1e; }
+  .pack b { font-size:17px; font-variant-numeric:tabular-nums; }
+  .pack .badge { font-size:11.5px; font-weight:700; color:#a8780c; margin-left:6px; }
+  .pack p { margin:2px 0 0; font-size:12.5px; opacity:.75; }
+  .line { padding:8px 10px; }
+  .line .qty { display:flex; align-items:center; gap:6px; font-variant-numeric:tabular-nums; }
+  .line .qty button { width:30px; height:30px; padding:0; }
+  .line .sum { min-width:70px; text-align:right; font-variant-numeric:tabular-nums; }
+  .total { display:flex; justify-content:space-between; font-weight:700; font-size:15px; padding:6px 2px 12px; }
+  .empty { opacity:.7; margin:0 0 10px; }
+  .acts { display:flex; gap:8px; justify-content:flex-end; }
+  .toast { position:absolute; z-index:1000; left:50%; bottom:calc(max(22px,env(safe-area-inset-bottom)) + 70px); transform:translateX(-50%); background:var(--ink); color:var(--sheet); padding:10px 16px; border-radius:12px; font:14px Arial,sans-serif; opacity:0; transition:opacity .3s; pointer-events:none; white-space:nowrap; }
+  .toast.show { opacity:1; }
+  /* keep the zoom buttons clear of the bottom bar (the attribution stays in the corner) */
+  .leaflet-bottom.leaflet-right .leaflet-control-zoom { margin-bottom:78px; }
+  @media (max-width:580px) { .leaflet-bottom.leaflet-right .leaflet-control-zoom { margin-bottom:192px; } .toast { bottom:calc(max(22px,env(safe-area-inset-bottom)) + 200px); } .top { left:8px; right:8px; } .target { width:calc(100vw - 105px); } h1 { font-size:19px; } .bottom { align-items:stretch; flex-direction:column; } .bottom .card { max-width:none; } }
 </style>
 </head>
 <body>
@@ -57,15 +90,18 @@
 <div class="bottom">
   <div class="card" id="status" role="status" aria-live="polite">Click Start to begin. One guess per place; get all five to win.</div>
   <button type="button" id="centerGuess" title="For keyboard users: guess the point at the center of the map" hidden>Guess map center</button>
+  <div class="card wallet"><span><b id="sight">100</b> sight</span><button type="button" class="buyBtn">Buy sight<span class="count" hidden></span></button></div>
 </div>
 <section class="shade" id="shade" aria-live="polite">
   <div class="modal">
     <h2 id="resultTitle">Find Chicago</h2>
     <p id="resultText">Find five Chicago landmarks on the map. You get 25 seconds and one click for each. A click within about two blocks counts. Find all five to win 25 sight. <span id="sightNote"></span></p>
-    <button type="button" id="action">Start game</button>
+    <button type="button" id="action">Start game</button><button type="button" class="buy buyBtn">Buy sight<span class="count" hidden></span></button>
     <a href="home.html">Back to the arcade</a>
   </div>
 </section>
+<section class="store" id="store" hidden><div class="shop" role="dialog" aria-modal="true" aria-labelledby="shopTitle" id="shopCard"></div></section>
+<div class="toast" id="toast" role="status"></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="wallet.js"></script>
 <script>
@@ -84,11 +120,59 @@ const rewardKey='arcade.find-chicago.reward.v1';
 // how much you can see: wallet.js blurs the streets for this balance; say so on the intro card
 function showSight(){
   const n=Wallet.get(); Wallet.see(n);
+  $('sight').textContent=Math.floor(n).toLocaleString('en-US');
   const note=$('sightNote'); if(!note) return;
   note.textContent = n>=Wallet.START ? `You have ${Math.floor(n).toLocaleString('en-US')} sight, so the streets are clear.`
     : `You have ${Math.floor(n).toLocaleString('en-US')} sight, so the streets will be ${n<Wallet.START*.4?'a fog':n<Wallet.START*.75?'blurry':'a little soft'}.`;
 }
 showSight(); Wallet.onChange(showSight); addEventListener('pageshow', showSight);
+
+// ---- buy sight: pick packs into a cart, then check out. Every price is pretend ----
+// The clock keeps running while you shop; the house does not stop the clock for anyone.
+const cart = new Map();  // pack index -> quantity
+const fmtN = n => Math.floor(n).toLocaleString('en-US');
+const money = n => '$'+n.toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2});
+function toast(text){ const t=$('toast'); t.textContent=text; t.classList.add('show');
+  clearTimeout(toast.t); toast.t=setTimeout(()=>t.classList.remove('show'), 2600); }
+function cartTotals(){ let coins=0, price=0, items=0;
+  cart.forEach((q,i)=>{ const pk=Wallet.PACKS[i]; coins+=pk.coins*q; price+=pk.price*q; items+=q; }); return {coins, price, items}; }
+function showCount(){ const {items}=cartTotals();
+  document.querySelectorAll('.buyBtn .count').forEach(c=>{ c.hidden=!items; c.textContent=items; });
+  document.querySelectorAll('.buyBtn').forEach(b=>b.setAttribute('aria-label', items ? `Buy sight, ${items} in cart` : 'Buy sight')); }
+let shopFrom=null;
+function renderShop(focusSel){
+  const {coins, price, items}=cartTotals();
+  $('shopCard').innerHTML = `<h2 id="shopTitle">Buy sight</h2>
+    <p class="fine">You have ${fmtN(Wallet.get())} sight. Every game in the arcade spends the same sight.${locked?'':' The clock is still running.'}</p>
+    <h3>Packs</h3>` +
+    Wallet.PACKS.map((pk,i)=>`<div class="pack ${pk.hot?'hot':''}"><div><b>${fmtN(pk.coins)}</b>${pk.badge?`<span class="badge">${pk.badge}</span>`:''}
+      <p>${pk.name}. ${pk.note}</p></div><button type="button" data-add="${i}">Add · ${money(pk.price)}*</button></div>`).join('') +
+    `<h3>Cart${items?` (${items})`:''}</h3>` +
+    (items ? [...cart].map(([i,q])=>{ const pk=Wallet.PACKS[i];
+      return `<div class="line"><span>${pk.name}<br><small>${fmtN(pk.coins*q)} sight</small></span>
+        <span class="qty"><button type="button" data-dec="${i}" aria-label="One fewer ${pk.name}">−</button><span aria-label="Quantity">${q}</span><button type="button" data-inc="${i}" aria-label="One more ${pk.name}">+</button></span>
+        <span class="sum">${money(pk.price*q)}</span></div>`; }).join('') +
+      `<div class="total"><span>+${fmtN(coins)} sight</span><span>${money(price)}*</span></div>`
+    : `<p class="empty">Your cart is empty. Your eyes are not much fuller.</p>`) +
+    `<p class="fine">*All prices are pretend. There’s no real money, card, or checkout anywhere in the arcade.</p>
+    <div class="acts"><button type="button" id="shopClose">Keep playing</button><button type="button" class="primary" id="checkout" ${items?'':'disabled'}>Check out</button></div>`;
+  $('shopCard').querySelectorAll('[data-add],[data-inc]').forEach(b=>b.onclick=()=>{ const i=+(b.dataset.add??b.dataset.inc);
+    cart.set(i,(cart.get(i)||0)+1);
+    renderShop(b.dataset.add!==undefined ? `[data-add="${i}"]` : `[data-inc="${i}"]`); showCount(); });
+  $('shopCard').querySelectorAll('[data-dec]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.dec, q=(cart.get(i)||0)-1;
+    if(q>0) cart.set(i,q); else cart.delete(i); renderShop(cart.has(i) ? `[data-dec="${i}"]` : '#shopClose'); showCount(); });
+  $('shopClose').onclick=closeShop;
+  $('checkout').onclick=()=>{ const t=cartTotals(); if(!t.items) return;
+    Wallet.add(t.coins); cart.clear(); showSight(); showCount(); closeShop();
+    toast(`+${fmtN(t.coins)} sight. Pretend charge: ${money(t.price)}`); };
+  const f=focusSel && $('shopCard').querySelector(focusSel); (f||$('shopClose')).focus();
+}
+function openShop(e){ shopFrom=e && e.currentTarget; $('store').hidden=false; renderShop(); }
+function closeShop(){ $('store').hidden=true; (shopFrom && shopFrom.offsetParent ? shopFrom : document.querySelector('.bottom .buyBtn')).focus(); }
+document.querySelectorAll('.buyBtn').forEach(b=>b.onclick=openShop);
+$('store').addEventListener('click', e=>{ if(e.target.id==='store') closeShop(); });
+addEventListener('keydown', e=>{ if(e.key==='Escape' && !$('store').hidden) closeShop(); });
+showCount();
 function clearReveal(){ if(reveal){ reveal.remove(); reveal=null; } }
 function setTimer(seconds){ $('timer').firstChild.textContent=String(seconds); $('timer').classList.toggle('urgent',seconds<=5); }
 function stopClock(){ if(tick){ clearInterval(tick); tick=null; } }
@@ -116,6 +200,7 @@ function finish(won,reason){
   if(won){
     let rewarded=false;
     try { if(!localStorage.getItem(rewardKey)){ Wallet.add(REWARD); localStorage.setItem(rewardKey,'1'); rewarded=true; } } catch(e){}
+    showSight();
     show('You found Chicago!',`All five places found. ${rewarded?`You earned ${REWARD} sight.`:'You already claimed the sight reward on this browser.'}`,'Play again');
   } else {
     show('Not quite!',`${reason} You found ${round} of ${PLACES.length} places. Try the whole route again?`,'Try again');
