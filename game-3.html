@@ -3,37 +3,240 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Locked tent · Coming soon</title>
+<title>Find Chicago · The Arcade</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <style>
-  :root { --bg:#9cbf7a; --ink:#173430; --caption:rgba(23,52,48,.75); --sheet:#f3efe2; --accent:#c9461a; --accent-ink:#fff; --hazard:#f2c230; color-scheme:light; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#22371d; --ink:#e6efe9; --caption:rgba(230,239,233,.7); --sheet:#1b2a22; --accent:#e8692c; --accent-ink:#1a0d06; --hazard:#c99d1e; color-scheme:dark; }
-  }
-  html, body { margin:0; min-height:100%; background:var(--bg); color:var(--ink);
-    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif; }
-  body { display:grid; place-items:center; min-height:100vh; padding:24px; box-sizing:border-box; }
-  .card { width:min(420px,100%); background:var(--sheet); border-radius:18px; padding:24px; text-align:center;
-    box-shadow:0 10px 30px rgba(0,0,0,.2); }
-  .tape { height:14px; margin:0 -24px 20px; background:repeating-linear-gradient(-45deg, var(--hazard) 0 14px, #222 14px 28px); }
-  h1 { margin:0 0 6px; font-size:26px; }
-  p { margin:0 0 16px; color:var(--caption); }
-  .purse { font-variant-numeric:tabular-nums; }
-  a { display:block; padding:12px; border-radius:12px; background:var(--accent); color:var(--accent-ink); text-decoration:none; font-weight:600; }
+  :root { --ink:#173430; --sheet:#f3efe2; --accent:#c9461a; --accent-ink:#fff; --grass:#9cbf7a; --line:rgba(23,52,48,.18); color-scheme:light; }
+  @media (prefers-color-scheme:dark) { :root { --ink:#e6efe9; --sheet:#1b2a22; --accent:#e8692c; --accent-ink:#1a0d06; --grass:#22371d; --line:rgba(230,239,233,.18); } }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif; color:var(--ink); background:var(--grass); }
+  button, a { font:inherit; }
+  button:focus-visible, a:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+  #map { position:absolute; inset:0; z-index:0; background:#e5e3d8; }
+  .leaflet-container { font-family:Arial,sans-serif; }
+  /* the map is played for your sight: as it runs out the streets blur and the dark closes in from the edges.
+     --loss and --blur come from wallet.js. Guess markers and the cards stay sharp, so you can always read your result. */
+  .leaflet-tile-pane { filter:blur(var(--blur,0px)); transition:filter .8s ease; }
+  .blind { position:absolute; inset:0; z-index:450; pointer-events:none; transition:background .8s ease;
+    background:radial-gradient(ellipse at 50% 45%, transparent calc(78% - var(--loss,0)*70%),
+      rgba(5,12,11,calc(var(--loss,0)*.95)) calc(100% - var(--loss,0)*55%)); }
+  .top { position:absolute; z-index:500; top:max(12px,env(safe-area-inset-top)); left:12px; right:12px; display:flex; justify-content:space-between; gap:12px; pointer-events:none; }
+  .card { background:var(--sheet); border:1px solid var(--line); border-radius:15px; box-shadow:0 5px 20px #0003; padding:11px 14px; pointer-events:auto; }
+  .target { width:min(410px,calc(100vw - 110px)); }
+  .eyebrow { margin:0 0 2px; font:700 11px Arial,sans-serif; letter-spacing:.1em; text-transform:uppercase; opacity:.7; }
+  h1 { font-size:23px; margin:0 0 4px; }
+  .target p:last-child { margin:0; font:14px/1.35 Arial,sans-serif; }
+  .timer { min-width:76px; text-align:center; font:700 29px/1 Arial,sans-serif; font-variant-numeric:tabular-nums; }
+  .timer small { display:block; margin-top:3px; font:11px Arial,sans-serif; text-transform:uppercase; letter-spacing:.08em; }
+  .timer.urgent { color:#b72b14; }
+  .bottom { position:absolute; z-index:500; bottom:max(22px,env(safe-area-inset-bottom)); left:12px; right:12px; display:flex; align-items:end; justify-content:space-between; gap:12px; pointer-events:none; }
+  .bottom > * { pointer-events:auto; }
+  .bottom #status { margin-right:auto; }
+  .bottom .card { font:13px/1.4 Arial,sans-serif; max-width:530px; }
+  .bottom button { border:0; border-radius:12px; padding:11px 14px; background:var(--accent); color:var(--accent-ink); font-weight:700; cursor:pointer; }
+  .shade { position:absolute; z-index:900; inset:0; display:grid; place-items:center; background:#13241fcc; padding:20px; }
+  .shade[hidden] { display:none; }
+  .modal { width:min(440px,100%); background:var(--sheet); border-radius:20px; padding:24px; box-shadow:0 12px 36px #0005; }
+  .modal h2 { font-size:30px; margin:0 0 10px; }
+  .modal p { font:16px/1.5 Arial,sans-serif; margin:0 0 16px; }
+  .modal button { border:0; background:var(--accent); color:var(--accent-ink); border-radius:12px; padding:12px 18px; font-weight:700; cursor:pointer; }
+  .modal a { display:inline-block; margin-left:12px; color:var(--ink); }
+  /* buy sight: the same packs every shop in the arcade sells (wallet.js), through a cart */
+  .wallet { display:flex; align-items:center; gap:10px; padding:7px 7px 7px 14px; font:13px Arial,sans-serif; }
+  .wallet b { font-size:18px; font-variant-numeric:tabular-nums; }
+  .bottom .wallet button, .modal .buy { position:relative; background:transparent; color:var(--ink); border:1.5px solid var(--accent); }
+  .modal .buy { margin-left:10px; padding:10.5px 16px; }
+  .count { position:absolute; top:-8px; right:-8px; min-width:20px; height:20px; padding:0 5px; border-radius:10px; background:var(--accent); color:var(--accent-ink); font:700 12px/20px Arial,sans-serif; }
+  .count[hidden] { display:none; }
+  .store { position:absolute; z-index:950; inset:0; display:grid; place-items:center; background:#13241fcc; padding:16px; }
+  .store[hidden] { display:none; }
+  .shop { width:min(460px,100%); max-height:calc(100vh - 32px); overflow-y:auto; background:var(--sheet); border-radius:20px; padding:20px; box-shadow:0 12px 36px #0005; font:14px/1.4 Arial,sans-serif; }
+  .shop h2 { font:700 24px "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif; margin:0 0 4px; }
+  .shop h3 { font:700 12px Arial,sans-serif; letter-spacing:.1em; text-transform:uppercase; opacity:.7; margin:16px 0 8px; }
+  .shop .fine { font-size:12.5px; opacity:.72; margin:0 0 10px; }
+  .shop button { font:700 14px Arial,sans-serif; border-radius:10px; padding:8px 12px; cursor:pointer; border:1.5px solid var(--accent); background:transparent; color:var(--ink); white-space:nowrap; }
+  .shop button.primary { background:var(--accent); color:var(--accent-ink); }
+  .shop button:disabled { opacity:.45; cursor:default; }
+  .pack, .line { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 12px; border:1.5px solid var(--line); border-radius:13px; margin-bottom:8px; }
+  .pack.hot { border-color:#c99d1e; }
+  .pack b { font-size:17px; font-variant-numeric:tabular-nums; }
+  .pack .badge { font-size:11.5px; font-weight:700; color:#a8780c; margin-left:6px; }
+  .pack p { margin:2px 0 0; font-size:12.5px; opacity:.75; }
+  .line { padding:8px 10px; }
+  .line .qty { display:flex; align-items:center; gap:6px; font-variant-numeric:tabular-nums; }
+  .line .qty button { width:30px; height:30px; padding:0; }
+  .line .sum { min-width:70px; text-align:right; font-variant-numeric:tabular-nums; }
+  .total { display:flex; justify-content:space-between; font-weight:700; font-size:15px; padding:6px 2px 12px; }
+  .empty { opacity:.7; margin:0 0 10px; }
+  .acts { display:flex; gap:8px; justify-content:flex-end; }
+  .toast { position:absolute; z-index:1000; left:50%; bottom:calc(max(22px,env(safe-area-inset-bottom)) + 70px); transform:translateX(-50%); background:var(--ink); color:var(--sheet); padding:10px 16px; border-radius:12px; font:14px Arial,sans-serif; opacity:0; transition:opacity .3s; pointer-events:none; white-space:nowrap; }
+  .toast.show { opacity:1; }
+  /* keep the zoom buttons clear of the bottom bar (the attribution stays in the corner) */
+  .leaflet-bottom.leaflet-right .leaflet-control-zoom { margin-bottom:78px; }
+  @media (max-width:580px) { .leaflet-bottom.leaflet-right .leaflet-control-zoom { margin-bottom:192px; } .toast { bottom:calc(max(22px,env(safe-area-inset-bottom)) + 200px); } .top { left:8px; right:8px; } .target { width:calc(100vw - 105px); } h1 { font-size:19px; } .bottom { align-items:stretch; flex-direction:column; } .bottom .card { max-width:none; } }
 </style>
 </head>
 <body>
-<main class="card">
-  <div class="tape" aria-hidden="true"></div>
-  <h1>Locked tent</h1>
-  <p>The flap is tied shut. A sign says “soon.” Coming soon.</p>
-  <p class="purse">Your sight: <b id="coins">…</b></p>
-  <a href="home.html">Back to the arcade</a>
-</main>
-<script src="wallet.js"></script>
+<div id="map" role="application" aria-label="Interactive map of Chicago. Drag to pan and use plus and minus to zoom."></div>
+<div class="blind" aria-hidden="true"></div>
+<header class="top">
+  <div class="card target">
+    <p class="eyebrow" id="progress">Find Chicago · 1 of 5</p>
+    <h1 id="place">Five places. One city.</h1>
+    <p id="clue">Drag and zoom the map, then click where you think the place is.</p>
+  </div>
+  <div class="card timer" id="timer">25<small>seconds</small></div>
+</header>
+<div class="bottom">
+  <div class="card" id="status" role="status" aria-live="polite">Click Start to begin. One guess per place; get all five to win.</div>
+  <button type="button" id="centerGuess" title="For keyboard users: guess the point at the center of the map" hidden>Guess map center</button>
+  <div class="card wallet"><span><b id="sight">100</b> sight</span><button type="button" class="buyBtn">Buy sight<span class="count" hidden></span></button></div>
+</div>
+<section class="shade" id="shade" aria-live="polite">
+  <div class="modal">
+    <h2 id="resultTitle">Find Chicago</h2>
+    <p id="resultText">Find five Chicago landmarks on the map. You get 25 seconds and one click for each. A click within about two blocks counts. Find all five to win 25 sight. <span id="sightNote"></span></p>
+    <button type="button" id="action">Start game</button><button type="button" class="buy buyBtn">Buy sight<span class="count" hidden></span></button>
+    <a href="home.html">Back to the arcade</a>
+  </div>
+</section>
+<section class="store" id="store" hidden><div class="shop" role="dialog" aria-modal="true" aria-labelledby="shopTitle" id="shopCard"></div></section>
+<div class="toast" id="toast" role="status"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="wallet.js?v=3"></script>
 <script>
-// When this game is built, it is played for sight: read it with Wallet.get(), write it back with
-// Wallet.set(n) / Wallet.add(n) / Wallet.spend(n). See wallet.js.
-document.getElementById('coins').textContent = Math.floor(Wallet.get()).toLocaleString('en-US');
+// OpenStreetMap/Nominatim place centers, checked October 29, 2026.
+const PLACES = [
+  {name:'Cloud Gate', clue:'The mirrored sculpture nicknamed “The Bean” · Millennium Park', lat:41.8826813, lng:-87.6233399, radius:220, start:[41.8905,-87.6375]},
+  {name:'Willis Tower', clue:'233 S Wacker Dr · the former Sears Tower', lat:41.8787380, lng:-87.6359612, radius:240, start:[41.8714,-87.6193]},
+  {name:'Navy Pier', clue:'600 E Grand Ave · look along the lakefront', lat:41.8917999, lng:-87.6041447, radius:350, start:[41.9010,-87.6220]},
+  {name:'Wrigley Field', clue:'1060 W Addison St · home of the Cubs', lat:41.9481846, lng:-87.6555590, radius:270, start:[41.9570,-87.6750]},
+  {name:'University of Chicago', clue:'Hyde Park · find the center of campus', lat:41.7875398, lng:-87.5903888, radius:380, start:[41.8020,-87.6005]}
+];
+const SECONDS=25, START=[41.8781,-87.6298], REWARD=25;
+const $=id=>document.getElementById(id);
+let map, round=-1, deadline=0, tick=null, locked=true, reveal=null, nextTimer=null;
+const rewardKey='arcade.find-chicago.reward.v1';
+// how much you can see: wallet.js blurs the streets for this balance; say so on the intro card
+function showSight(){
+  const n=Wallet.get(); Wallet.see(n);
+  $('sight').textContent=Math.floor(n).toLocaleString('en-US');
+  const note=$('sightNote'); if(!note) return;
+  note.textContent = n>=Wallet.START ? `You have ${Math.floor(n).toLocaleString('en-US')} sight, so the streets are clear.`
+    : `You have ${Math.floor(n).toLocaleString('en-US')} sight, so the streets will be ${n<Wallet.START*.4?'a fog':n<Wallet.START*.75?'blurry':'a little soft'}.`;
+}
+showSight(); Wallet.onChange(showSight); addEventListener('pageshow', showSight);
+
+// ---- buy sight: pick packs into a cart, then check out. Every price is pretend ----
+// The clock keeps running while you shop; the house does not stop the clock for anyone.
+const cart = new Map();  // pack index -> quantity
+const fmtN = n => Math.floor(n).toLocaleString('en-US');
+const money = n => '$'+n.toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2});
+function toast(text){ const t=$('toast'); t.textContent=text; t.classList.add('show');
+  clearTimeout(toast.t); toast.t=setTimeout(()=>t.classList.remove('show'), 2600); }
+function cartTotals(){ let coins=0, price=0, items=0;
+  cart.forEach((q,i)=>{ const pk=Wallet.PACKS[i]; coins+=pk.coins*q; price+=pk.price*q; items+=q; }); return {coins, price, items}; }
+function showCount(){ const {items}=cartTotals();
+  document.querySelectorAll('.buyBtn .count').forEach(c=>{ c.hidden=!items; c.textContent=items; });
+  document.querySelectorAll('.buyBtn').forEach(b=>b.setAttribute('aria-label', items ? `Buy sight, ${items} in cart` : 'Buy sight')); }
+let shopFrom=null;
+function renderShop(focusSel){
+  const {coins, price, items}=cartTotals();
+  $('shopCard').innerHTML = `<h2 id="shopTitle">Buy sight</h2>
+    <p class="fine">You have ${fmtN(Wallet.get())} sight. Every game in the arcade spends the same sight.${locked?'':' The clock is still running.'}</p>
+    <h3>Packs</h3>` +
+    Wallet.PACKS.map((pk,i)=>`<div class="pack ${pk.hot?'hot':''}"><div><b>${fmtN(pk.coins)}</b>${pk.badge?`<span class="badge">${pk.badge}</span>`:''}
+      <p>${pk.name}. ${pk.note}</p></div><button type="button" data-add="${i}">Add · ${money(pk.price)}*</button></div>`).join('') +
+    `<h3>Cart${items?` (${items})`:''}</h3>` +
+    (items ? [...cart].map(([i,q])=>{ const pk=Wallet.PACKS[i];
+      return `<div class="line"><span>${pk.name}<br><small>${fmtN(pk.coins*q)} sight</small></span>
+        <span class="qty"><button type="button" data-dec="${i}" aria-label="One fewer ${pk.name}">−</button><span aria-label="Quantity">${q}</span><button type="button" data-inc="${i}" aria-label="One more ${pk.name}">+</button></span>
+        <span class="sum">${money(pk.price*q)}</span></div>`; }).join('') +
+      `<div class="total"><span>+${fmtN(coins)} sight</span><span>${money(price)}*</span></div>`
+    : `<p class="empty">Your cart is empty. Your eyes are not much fuller.</p>`) +
+    `<p class="fine">*All prices are pretend. There’s no real money, card, or checkout anywhere in the arcade.</p>
+    <div class="acts"><button type="button" id="shopClose">Keep playing</button><button type="button" class="primary" id="checkout" ${items?'':'disabled'}>Check out</button></div>`;
+  $('shopCard').querySelectorAll('[data-add],[data-inc]').forEach(b=>b.onclick=()=>{ const i=+(b.dataset.add??b.dataset.inc);
+    cart.set(i,(cart.get(i)||0)+1);
+    renderShop(b.dataset.add!==undefined ? `[data-add="${i}"]` : `[data-inc="${i}"]`); showCount(); });
+  $('shopCard').querySelectorAll('[data-dec]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.dec, q=(cart.get(i)||0)-1;
+    if(q>0) cart.set(i,q); else cart.delete(i); renderShop(cart.has(i) ? `[data-dec="${i}"]` : '#shopClose'); showCount(); });
+  $('shopClose').onclick=closeShop;
+  $('checkout').onclick=()=>{ const t=cartTotals(); if(!t.items) return;
+    Wallet.charge(t.price); Wallet.add(t.coins); cart.clear(); showSight(); showCount(); closeShop();
+    toast(`+${fmtN(t.coins)} sight. Pretend charge: ${money(t.price)}`); };
+  const f=focusSel && $('shopCard').querySelector(focusSel); (f||$('shopClose')).focus();
+}
+function openShop(e){ shopFrom=e && e.currentTarget; $('store').hidden=false; renderShop(); }
+function closeShop(){ $('store').hidden=true; (shopFrom && shopFrom.offsetParent ? shopFrom : document.querySelector('.bottom .buyBtn')).focus(); }
+document.querySelectorAll('.buyBtn').forEach(b=>b.onclick=openShop);
+$('store').addEventListener('click', e=>{ if(e.target.id==='store') closeShop(); });
+addEventListener('keydown', e=>{ if(e.key==='Escape' && !$('store').hidden) closeShop(); });
+showCount();
+function clearReveal(){ if(reveal){ reveal.remove(); reveal=null; } }
+function setTimer(seconds){ $('timer').firstChild.textContent=String(seconds); $('timer').classList.toggle('urgent',seconds<=5); }
+function stopClock(){ if(tick){ clearInterval(tick); tick=null; } }
+function clock(){
+  const left=Math.max(0,Math.ceil((deadline-Date.now())/1000));
+  setTimer(left);
+  if(left===0 && !locked) resolve(null);
+}
+function show(title,text,button){
+  $('resultTitle').textContent=title; $('resultText').textContent=text;
+  $('action').textContent=button; $('shade').hidden=false;
+}
+function startRound(i){
+  clearTimeout(nextTimer); stopClock(); round=i; locked=false; clearReveal();
+  const p=PLACES[i];
+  map.setView(p.start,14,{animate:false});
+  $('progress').textContent=`Find Chicago · ${i+1} of ${PLACES.length}`;
+  $('place').textContent=p.name; $('clue').textContent=p.clue;
+  $('status').textContent='Drag or zoom to the place. Your first click is your guess.';
+  $('centerGuess').hidden=false; $('shade').hidden=true;
+  deadline=Date.now()+SECONDS*1000; setTimer(SECONDS); tick=setInterval(clock,100); clock();
+}
+function finish(won,reason){
+  locked=true; stopClock(); $('centerGuess').hidden=true;
+  if(won){
+    let rewarded=false;
+    try { if(!localStorage.getItem(rewardKey)){ Wallet.add(REWARD); localStorage.setItem(rewardKey,'1'); rewarded=true; } } catch(e){}
+    showSight();
+    show('You found Chicago!',`All five places found. ${rewarded?`You earned ${REWARD} sight.`:'You already claimed the sight reward on this browser.'}`,'Play again');
+  } else {
+    show('Not quite!',`${reason} You found ${round} of ${PLACES.length} places. Try the whole route again?`,'Try again');
+  }
+}
+function resolve(latlng){
+  if(locked) return;
+  if(latlng && Date.now()>=deadline){ resolve(null); return; }
+  locked=true; stopClock(); $('centerGuess').hidden=true;
+  const p=PLACES[round], target=L.latLng(p.lat,p.lng);
+  const distance=latlng ? Math.round(latlng.distanceTo(target)) : null;
+  const hit=distance!==null && distance<=p.radius;
+  reveal=L.layerGroup().addTo(map);
+  L.circleMarker(target,{radius:9,color:'#fff',weight:3,fillColor:'#c9461a',fillOpacity:1}).addTo(reveal);
+  if(latlng){
+    L.circleMarker(latlng,{radius:7,color:'#173430',weight:2,fillColor:'#f2c230',fillOpacity:1}).addTo(reveal);
+    L.polyline([latlng,target],{color:'#c9461a',weight:3,dashArray:'5 6'}).addTo(reveal);
+  }
+  const result=hit?'Found it!':distance===null?'Time’s up.':`That was ${distance.toLocaleString()} m away.`;
+  $('status').textContent=`${result} The target is marked in orange.`;
+  if(hit && round<PLACES.length-1) nextTimer=setTimeout(()=>startRound(round+1),1400);
+  else nextTimer=setTimeout(()=>finish(hit,result),1500);
+}
+if(typeof L==='undefined'){
+  show('Map unavailable','The map library did not load. Check your connection and reload this page.','Reload');
+  $('action').onclick=()=>location.reload();
+} else {
+  map=L.map('map',{zoomControl:false,keyboard:true,worldCopyJump:true}).setView(START,11);
+  L.control.zoom({position:'bottomright'}).addTo(map);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    maxZoom:19, attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'
+  }).addTo(map);
+  map.on('click',e=>resolve(e.latlng));
+  $('centerGuess').onclick=()=>resolve(map.getCenter());
+  $('action').onclick=()=>startRound(0);
+}
 </script>
 </body>
 </html>

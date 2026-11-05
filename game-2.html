@@ -207,7 +207,7 @@
 <div class="backdrop" id="modal" hidden><div class="card" id="card" role="dialog" aria-modal="true"></div></div>
 <div class="toast" id="toast" role="status"></div>
 
-<script src="wallet.js"></script>
+<script src="wallet.js?v=3"></script>
 <script>
 const $ = id => document.getElementById(id);
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -880,7 +880,7 @@ function shop(){
     [{label:'Close', onClick:closeModal}]);
   $('card').querySelectorAll('.item button[data-i]').forEach(b=>b.onclick=()=>{
     const pk=Wallet.PACKS[+b.dataset.i];
-    const was=resFor(coins); coins=Wallet.add(pk.coins); if(resFor(coins)!==was) newBoard();
+    Wallet.charge(pk.price); const was=resFor(coins); coins=Wallet.add(pk.coins); if(resFor(coins)!==was) newBoard();
     renderSheet(); updateHud(); toast(`+${fmt(pk.coins)} sight. Everything looks a little more winnable.`); shop(); });
 }
 $('shopBtn').onclick=()=>{ if(state==='playing') return toast('The shop is closed while the clock is running.'); shop(); };

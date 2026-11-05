@@ -68,6 +68,7 @@
   .station .soon { display:block; font-size:11px; font-weight:400; color:var(--accent); text-align:center; letter-spacing:.06em; text-transform:uppercase; }
   .station.near .label { outline:2px solid var(--accent); }
   .station svg { display:block; overflow:visible; }
+  .station[hidden] { display:none; }
 
   .walker { position:absolute; width:30px; height:30px; margin:-15px 0 0 -15px; border-radius:50%; z-index:3; pointer-events:none;
     background:radial-gradient(circle at 35% 30%, #fff6 0 4px, transparent 5px), var(--coin);
@@ -98,6 +99,9 @@
   .blind { position:fixed; inset:0; z-index:4; pointer-events:none;
     background:radial-gradient(ellipse at 50% 45%, transparent calc(78% - var(--loss,0)*70%),
       rgba(5,12,11,calc(.3 + var(--loss,0)*.6)) calc(100% - var(--loss,0)*55%)); }
+  .purse .spent { margin:6px 0 0; font-size:14px; }
+  .purse .spent b { font-size:16px; font-variant-numeric:tabular-nums; }
+  .purse .spent small { display:block; font-size:11.5px; opacity:.8; }
   .shopbtn { pointer-events:auto; margin-top:8px; padding:7px 16px; border-radius:18px; border:0; background:var(--accent);
     color:var(--accent-ink); font-weight:600; font-size:15px; cursor:pointer; text-shadow:none; }
 
@@ -130,6 +134,7 @@
   <div class="purse">
     <b id="coins">1,000</b><span class="unit">sight</span>
     <p>Every game here is played for your sight.</p>
+    <p class="spent" id="spent" aria-live="polite">You’ve spent <b id="spentUsd">$0.00</b><small>pretend dollars, lifetime</small></p>
     <button class="shopbtn" id="shopBtn">Shop</button>
   </div>
   <div>
@@ -171,14 +176,14 @@
 
   <a class="station" id="st-game-3" href="game-3.html" data-id="game-3">
     <svg width="90" height="80" viewBox="-45 -40 90 80" aria-hidden="true">
-      <path d="M-36 34 V-6 a36 30 0 0 1 72 0 V34 Z" fill="var(--wood)"/>
-      <path d="M-36 -6 a36 30 0 0 1 72 0" fill="none" stroke="var(--wood-dark)" stroke-width="6"/>
-      <circle cy="6" r="13" fill="var(--wood-dark)"/>
-      <text y="12" text-anchor="middle" font-size="18" font-weight="700" fill="var(--hazard)" font-family="Georgia,serif">?</text>
-      <g><rect x="-40" y="18" width="80" height="9" fill="var(--hazard)" transform="rotate(7)"/>
-        <path d="M-34 18 l6 9 M-20 18 l6 9 M-6 18 l6 9 M8 18 l6 9 M22 18 l6 9" stroke="#222" stroke-width="4" transform="rotate(7)"/></g>
+      <path d="M-37 -25 L-13 -32 L12 -25 L37 -32 V26 L12 33 L-13 26 L-37 33 Z" fill="var(--sheet)" stroke="var(--wood-dark)" stroke-width="3"/>
+      <path d="M-13 -32 V26 M12 -25 V33" stroke="var(--path-edge)" stroke-width="2"/>
+      <path d="M-28 14 Q-6 1 4 9 T29 -2" fill="none" stroke="var(--path-edge)" stroke-width="5" stroke-linecap="round"/>
+      <path d="M8 -15 a10 10 0 1 1 20 0 q0 8 -10 20 q-10 -12 -10 -20" fill="var(--accent)"/>
+      <circle cx="18" cy="-15" r="3.5" fill="var(--accent-ink)"/>
+        
     </svg>
-    <span class="label">Locked tent</span>
+    <span class="label">Find Chicago</span>
   </a>
 
   <div class="walker" id="walker" aria-hidden="true"></div>
@@ -197,22 +202,24 @@
 <div class="backdrop" id="shop" hidden><div class="card" role="dialog" aria-modal="true" aria-labelledby="shopTitle" id="shopCard"></div></div>
 <div class="toast" id="toast" role="status"></div>
 
-<script src="wallet.js"></script>
-<script src="vision.js?v=3"></script>
+<script src="wallet.js?v=3"></script>
+<script src="vision.js?v=4"></script>
 <script>
 const $ = id => document.getElementById(id);
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const fmt = n => Math.floor(n).toLocaleString('en-US');
 
 // Add a game: give it its own .html file, a station in the markup, and an entry here.
-const GAMES = [
+const ALL_GAMES = [
   { id:'game-2', file:'game-2.html', name:'Bomb Sheet', ready:true,
     desc:'Five bombs hide in a fractal spreadsheet, each a few shades darker than its neighbours. Twenty seconds, double or nothing. The less sight you have, the more noise the house lays over the sheet.' },
   { id:'coypond', file:'coypond.html', name:'Koi Pond Stakes', ready:true,
     desc:'Bet your sight on which koi eats the pellet first. Whatever you win or lose comes back here with you.' },
-  { id:'game-3', file:'game-3.html', name:'Locked tent', ready:true,
-    desc:'The flap is tied shut. A sign says “soon,” and has said so for a while.' },
+  { id:'game-3', file:'game-3.html', name:'Find Chicago', ready:true, hidden:false,
+    desc:'Search the city map for five landmarks. You get 25 seconds and one guess for each place.' },
 ];
+const GAMES = ALL_GAMES.filter(g=>!g.hidden);
+ALL_GAMES.forEach(g=>{ $('st-'+g.id).hidden = !!g.hidden; });
 const HUB='arcade.hub.v1', NEAR=70, SPEED=4.2, STAND=82; // STAND: how far below a station you stand
 
 let W, H, stations={}, gate={x:0,y:0};
@@ -223,8 +230,9 @@ function layout(){
   W=innerWidth; H=innerHeight;
   const wide = W > H*1.1;
   // spots are fractions of the screen; tall screens stack the games up a winding path
-  const spots = wide
-    ? [[.2,.45],[.5,.32],[.8,.45]]
+  const spots = GAMES.length===2
+    ? (wide ? [[.3,.4],[.7,.4]] : [[.5,.3],[.5,.58]])
+    : wide ? [[.2,.45],[.5,.32],[.8,.45]]
     : [[.27,.62],[.5,.3],[.73,.62]];
   gate = wide ? {x:W*.5, y:H*.8} : {x:W*.5, y:H*.86};
   GAMES.forEach((g,i)=>{
@@ -333,15 +341,17 @@ addEventListener('blur', ()=>keys.clear());
 addEventListener('resize', ()=>{ layout(); if(me.tx===null && shown) standAt(shown); });
 
 // ---- sight: the one currency every game uses (see wallet.js) ----
-function showCoins(n){ $('coins').textContent=fmt(n); Wallet.see(n); window.skyMeter && skyMeter.refresh(); }
+function showCoins(n){ $('coins').textContent=fmt(n); Wallet.see(n); window.skyMeter && skyMeter.refresh(); showSpent(); }
+// lifetime pretend dollars across every shop in the arcade (wallet.js keeps the total)
+function showSpent(){ $('spentUsd').textContent='$'+Wallet.spent().toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2}); }
 showCoins(Wallet.get());
-Wallet.onChange(showCoins);
+Wallet.onChange(showCoins); Wallet.onSpend(showSpent);
 // coming back from a game with the back button can restore this page from cache
 addEventListener('pageshow', ()=>showCoins(Wallet.get()));
 
 // ---- vision meter: the Chicago skyline regression (see vision.js) ----
 // home.html?fresh resets sight and the noise, for test runs and critique
-if(new URLSearchParams(location.search).has('fresh')){ Wallet.set(Wallet.START); Vision.reset(); history.replaceState(null,'',location.pathname); }
+if(new URLSearchParams(location.search).has('fresh')){ Wallet.set(Wallet.START); Wallet.resetSpent(); Vision.reset(); history.replaceState(null,'',location.pathname); showCoins(Wallet.get()); }
 const HINT=$('hint').textContent;
 let r2s=null; // smoothed, so the readout doesn't flicker with the static
 window.skyMeter = Vision.mount($('sky'), st=>{
@@ -377,7 +387,7 @@ function openShop(){
      <button class="close" id="shopClose">Close</button>`;
   $('shopCard').querySelectorAll('.pack button').forEach(b=>b.onclick=()=>{
     const pk=Wallet.PACKS[+b.dataset.i];
-    showCoins(Wallet.add(pk.coins)); openShop();
+    Wallet.charge(pk.price); showCoins(Wallet.add(pk.coins)); openShop();
     toast(`+${fmt(pk.coins)} sight. Pretend charge: ${money(pk.price)}`);
   });
   $('shopClose').onclick=closeShop;
