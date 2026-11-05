@@ -1,5 +1,5 @@
 // Every game in the arcade is played for the same thing: your sight.
-// You arrive with 100. Bet it, win more, or lose it, and the less you have
+// You arrive with 1,000. Bet it, win more, or lose it, and the less you have
 // the less of the screen you can see. Each game reads the balance from here
 // on boot and writes it back when it saves.
 //
@@ -16,7 +16,7 @@
 //   --loss  0 (perfect sight, START or more) .. 1 (nothing left)
 //   --blur  a ready-made blur length for filter: blur(var(--blur))
 (function(){
-  const KEY='arcade.wallet.v1', START=100;
+  const KEY='arcade.wallet.v1', START=1000;
   const LEGACY='koipondstakes.v1'; // the pond kept its own balance before the arcade existed
   const ok = n => typeof n==='number' && isFinite(n) && n>=0;
 

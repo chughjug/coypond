@@ -340,7 +340,7 @@
 <div class="blind" aria-hidden="true"></div>
 <header class="hud">
   <div class="purse">
-    <div class="money"><b id="coins">100</b><span class="unit">sight</span><button class="addcoins" id="addCoins" aria-label="Buy sight">+</button></div>
+    <div class="money"><b id="coins">1,000</b><span class="unit">sight</span><button class="addcoins" id="addCoins" aria-label="Buy sight">+</button></div>
     <div class="chips" id="chips"></div>
   </div>
   <div class="hudright">
@@ -402,7 +402,7 @@ const PATTERNS = [
 function lerpAngle(a,b,t){ const d=((b-a+Math.PI)%TAU+TAU)%TAU-Math.PI; return a+d*t; }
 
 // ---- economy ----
-let coins=100, gems=0, wins=0, losses=0, credit=0, scales=0;
+let coins=Wallet.START, gems=0, wins=0, losses=0, credit=0, scales=0;
 let luckyOwned=0, useLucky=false, luckyThisRace=false, vip=false, insured=false, gemPrice=10, lossStreak=0;
 const REST_AT=12, hats={}, feeds={};
 let betsSinceHand=0;  // the cookie wall comes down every few bets
@@ -1863,7 +1863,7 @@ function del4(){
     {label:'Understood', primary:true, onClick:closeModal},
     {label:'Delete it now, properly', tiny:true, onClick:()=>{
       try{ localStorage.removeItem(SAVE); }catch(e){}
-      openModal(`<h3>Deleted</h3><p>Your pond is gone. Reload to start a new one, at day 1, with 100 sight.</p>
+      openModal(`<h3>Deleted</h3><p>Your pond is gone. Reload to start a new one, at day 1, with 1,000 sight.</p>
         <p class="fine">Your 1,431 partners have been notified, and will keep their copies.</p>`,
         [{label:'Close', primary:true, onClick:closeModal}]); }}]);
 }

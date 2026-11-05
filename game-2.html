@@ -134,7 +134,7 @@
 <body>
 <header class="hud">
   <div class="purse">
-    <b id="coins">100</b><span class="unit">sight</span>
+    <b id="coins">1,000</b><span class="unit">sight</span>
     <div class="eyes"><span>Vision</span><span class="meter"><i id="visionBar"></i></span><span id="visionPct">100%</span></div>
   </div>
   <div class="hudright">
@@ -198,7 +198,7 @@ const stakeOf = share => share>=1 ? coins : Math.max(1, Math.round(coins*share))
 const squintCost = () => Math.max(1, Math.round((coins+held)*.05));
 
 // Sight is felt in doublings, not points. q = log2(sight / START): 0 is where you started,
-// +1 is twice that, -1 is half. Losing 10 of 100 is a nudge; winning 25x is a new pair of eyes.
+// +1 is twice that, -1 is half. Losing 100 of 1,000 is a nudge; winning 25x is a new pair of eyes.
 const doublings = v => Math.log2(Math.max(1, v)/Wallet.START);
 const FLOOR = () => Math.log2(Wallet.START);              // halvings from START down to 1 sight
 const depth = v => Math.max(0, Math.min(1, -doublings(v)/FLOOR())); // 0 at START or more, 1 at 1 sight
