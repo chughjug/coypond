@@ -218,8 +218,11 @@ const TUNE={
   noise0:2.6,                 // house noise at your starting sight, in shades (CIELAB L*)
   perHalf:1.14,               // noise grows by this for every halving below the start
   perDouble:.7,               // and shrinks by this for every doubling above it
-  dLo:7, dHi:12,              // how many shades darker a bomb is, picked at random in this range
-  rig:1.5, dMin:2,            // every doubling above the start lowers the bottom of that range, down to dMin
+  // most bombs are easy: this many shades darker, at random in this range, whatever your sight
+  easyLo:10, easyHi:14,
+  // and the last few are not. hard bombs are dLo shades darker at your starting sight; every doubling
+  // above it takes rig shades off, down to dMin. This is the only darkness that moves with your sight
+  hard:1, dLo:5, rig:1.5, dMin:1.5,
 };
 const SQUINT_MS=5000, NOISE_MS=140, RMAX=6;
 const START = () => Wallet.START;
@@ -233,8 +236,8 @@ const doublings = v => Math.log2(Math.max(1, v)/START());
 const FLOOR = () => Math.log2(START());              // halvings from START down to 1 sight
 const depth = v => Math.max(0, Math.min(1, -doublings(v)/FLOOR())); // 0 at START or more, 1 at 1 sight
 const noiseFor = v => { const q=doublings(v); return TUNE.noise0*(q<0 ? Math.pow(TUNE.perHalf, -q) : Math.pow(TUNE.perDouble, q)); };
-// the house rigs the rich: the more you see, the fainter its faintest bombs get
-const darkRange = v => [Math.max(TUNE.dMin, TUNE.dLo - TUNE.rig*Math.max(0, doublings(v))), TUNE.dHi];
+// the house rigs the rich: the more you see, the fainter its hard bombs get
+const hardDark = v => Math.max(TUNE.dMin, TUNE.dLo - TUNE.rig*Math.max(0, doublings(v)));
 // above START every doubling buys another step of resolution. bombs keep their size, so they
 // become blocks of finer cells; tap any cell of the block. RMAX caps the sheet near 125k cells
 const resFor = v => Math.max(1, Math.min(RMAX, 1+Math.floor(doublings(v))));
@@ -460,7 +463,7 @@ function build(mu, cols, rows, res, k){
 }
 
 function plant(){
-  const {cols, rows, res:B, inside, busy, bc}=grid, [lo,hi]=darkRange(playSight());
+  const {cols, rows, res:B, inside, busy, bc}=grid, lo=hardDark(playSight());
   const far = (c,r) => bombs.every(b=>Math.max(Math.abs(b.c-c),Math.abs(b.r-r))>=4*B);
   const fits = (c,r) => c>=1 && r>=1 && c+B<cols && r+B<rows;
   const same = (c,r,v,pad=0) => { for(let y=r-pad;y<r+B+pad;y++) for(let x=c-pad;x<c+B+pad;x++) if(inside[y*cols+x]!==v) return false; return true; };
@@ -473,13 +476,14 @@ function plant(){
   coloured.sort((a,b)=>b.busy-a.busy);
   const pool=coloured.slice(0, Math.max(TUNE.bombs*4, Math.floor(coloured.length*.35)));
   bombs=[];
-  // each bomb is its own number of shades darker, somewhere in the house's range.
-  // one always goes in the calm blue middle, at the faint end of it
-  if(calm.length){ const p=pickOne(calm); bombs.push({c:p.c, r:p.r, size:B, found:false, dL:lo, calm:true}); }
+  // the hard ones first, in the busy parts of the sheet. You find the easy ones in seconds,
+  // and then you are one bomb away, which is where the house wants you
+  const hard=Math.min(TUNE.hard, TUNE.bombs), anywhere=coloured.concat(calm);
   let guard=0;
   while(bombs.length<TUNE.bombs && guard++<3000){
-    const p=pickOne(guard<2000 ? pool : coloured); if(!p || !far(p.c,p.r)) continue;
-    bombs.push({c:p.c, r:p.r, size:B, found:false, dL:rand(lo, hi)});
+    const isHard=bombs.length<hard, p=pickOne(isHard && guard<2000 ? pool : anywhere);
+    if(!p || !far(p.c,p.r)) continue;
+    bombs.push({c:p.c, r:p.r, size:B, found:false, hard:isHard, dL: isHard ? lo : rand(TUNE.easyLo, TUNE.easyHi)});
   }
   shown=null; paint();
 }
@@ -661,8 +665,9 @@ function renderSheet(){
   }
   $('cap').textContent = isFinite(cap) ? `Your account has been reviewed. Maximum stake: ${fmt(cap)}.` : '';
   stake=stakeFor(opt);
-  const v=playSight(), [lo,hi]=darkRange(v), r=resFor(v);
-  $('terms').textContent = `${TUNE.bombs} bombs · ${TUNE.clock} seconds · bombs ${lo.toFixed(lo%1?1:0)}–${hi} shades darker · house noise ±${noiseFor(v).toFixed(1)}`
+  const v=playSight(), lo=hardDark(v), r=resFor(v), dp=n=>n.toFixed(n%1?1:0);
+  $('terms').textContent = `${TUNE.bombs} bombs · ${TUNE.clock} seconds · ${TUNE.bombs-TUNE.hard} are ${TUNE.easyLo}–${TUNE.easyHi} shades darker, `
+    + `${TUNE.hard===1 ? 'one is' : TUNE.hard+' are'} ${dp(lo)} · house noise ±${noiseFor(v).toFixed(1)}`
     + (r>1 || doublings(v)>=0 ? ` · resolution ×${r}` : '');
   const go=$('go');
   if(coins<=0){ go.disabled=false; go.textContent='Out of sight. Back to the arcade'; go.onclick=()=>location.href='home.html'; return; }
@@ -777,13 +782,13 @@ function cashOut(){
 function lose(){
   state='result'; timeLeft=0; updateStatus();
   const found=bombs.filter(b=>b.found).length;
-  const quiet=bombs.find(b=>b.calm && !b.found);
+  const missed=bombs.filter(b=>!b.found), hidden=missed.length && missed.every(b=>b.hard) ? missed[0] : null;
   setFormula('', `=COUNTIF(${'A1:'+ref(grid.cols-1, grid.rows-1)},"bomb")`, String(TUNE.bombs));
   // for a moment, the noise lifts, so you can see how close they were
   revealing=true; applyVision();
   const before=settle(0);
   const close = found===TUNE.bombs-1 ? `<small>${found} of ${TUNE.bombs}. One bomb away.</small>` : `<small>${found} of ${TUNE.bombs} found.</small>`;
-  const note = quiet ? `<small>One was in the blue, ${quiet.dL.toFixed(1)} shades darker than the blue.</small>` : '';
+  const note = hidden ? `<small>The last one was ${hidden.dL.toFixed(1)} shades darker. The others were ${TUNE.easyLo} to ${TUNE.easyHi}.</small>` : '';
   showResult(`Time’s up<strong class="l">−${fmt(stake)}</strong>${close}${note}${eyes(before, coins)}`, 3400, ()=>{
     revealing=false; roll(); applyVision();
     if(!warned && sight()<60){ warned=true; save(); setTimeout(()=>toast('Your sight is now below the arcade average.'), 1200); }
@@ -813,7 +818,7 @@ function endRound(before){
 
 // ---- ?tune: sliders on everything the house can turn, and a live win rate ----
 const TUNABLE=[['bombs',1,10,1],['clock',5,60,1],['house',1,1.6,.05],['miss',0,6,.5],['noise0',0,12,.1],
-  ['perHalf',1,1.6,.01],['perDouble',.3,1,.05],['dLo',0,20,.5],['dHi',0,30,.5],['rig',0,5,.25],['dMin',0,10,.5]];
+  ['perHalf',1,1.6,.01],['perDouble',.3,1,.05],['easyLo',0,30,.5],['easyHi',0,30,.5],['hard',0,5,1],['dLo',0,20,.5],['rig',0,5,.25],['dMin',0,10,.5]];
 function tunePanel(){
   if(!new URLSearchParams(location.search).has('tune')) return;
   let el=$('tune');
@@ -825,9 +830,10 @@ function tunePanel(){
     $('tuneSight').onclick=()=>{ coins=Wallet.START; Wallet.set(coins); newBoard(); renderSheet(); updateHud(); };
   }
   for(const [k] of TUNABLE){ el.querySelector(`[data-k="${k}"]`).value=TUNE[k]; $('tv-'+k).textContent=TUNE[k]; }
-  const v=playSight(), [lo,hi]=darkRange(v), nz=noiseFor(v);
+  const v=playSight(), lo=hardDark(v), nz=noiseFor(v), sn=d=>nz ? (d/nz).toFixed(1) : '∞';
   $('tuneStats').innerHTML=`sight ${fmt(v)} (${(doublings(v)>=0?'+':'')+doublings(v).toFixed(2)} doublings)<br>`
-    + `noise ±${nz.toFixed(2)} · bombs ${lo.toFixed(1)}–${hi}<br>signal/noise ${nz ? ((lo+hi)/2/nz).toFixed(1) : '∞'}<br>`
+    + `noise ±${nz.toFixed(2)} · easy ${TUNE.easyLo}–${TUNE.easyHi} · hard ${lo.toFixed(1)}<br>`
+    + `signal/noise: easy ${sn((TUNE.easyLo+TUNE.easyHi)/2)}, hard ${sn(lo)}<br>`
     + `this session: ${sessWins}/${sessRounds} won${sessRounds?` (${Math.round(sessWins/sessRounds*100)}%)`:''}`;
 }
 
@@ -871,7 +877,7 @@ $('howBtn').onclick=()=>openModal(`<h3>How it works</h3>
   <p>${TUNE.bombs} cells in the sheet are a few shades darker than the fractal says they should be. Tap each one before the clock runs out. Scroll or pinch to zoom, and drag to move around.</p>
   <p>You bet sight, double or nothing. A wrong cell costs ${TUNE.miss} seconds. Once you’ve found two, the house will offer to buy the round back early.</p>
   <p>Lose sight and the house lays noise over every cell. Gain it and the sheet gets finer, with the same size bombs.</p>
-  <p class="fine">The table minimum is ${fmt(MIN_BET())} sight. Players who double their sight have their stakes reviewed. Every bomb is a different number of shades darker, and the house picks fainter ones for players who can see more. Seconds are house seconds, which are ${Math.round((TUNE.house-1)*100)}% shorter. Rounds played: ${rounds}. Rounds won: ${wins}.</p>`,
+  <p class="fine">The table minimum is ${fmt(MIN_BET())} sight. Players who double their sight have their stakes reviewed. Most bombs are easy. The last one is not, and the house makes it fainter for players who can see more. Seconds are house seconds, which are ${Math.round((TUNE.house-1)*100)}% shorter. Rounds played: ${rounds}. Rounds won: ${wins}.</p>`,
   [{label:'Got it', primary:true, onClick:closeModal}]);
 $('footBtn').onclick=()=>openModal(`<h3>Play responsibly</h3>
   <p>Sight here is a number saved in your browser. Your actual eyes are fine.</p>
